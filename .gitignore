@@ -11,3 +11,6 @@
 /.project
 /*.jar
 /TODO.txt
+/out
+/.idea
+/*.iml
