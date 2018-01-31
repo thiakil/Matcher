@@ -26,12 +26,13 @@ import matcher.type.ClassInstance;
 public class CfrIf {
 	public static synchronized String decompile(ClassInstance cls, ClassFeatureExtractor extractor, boolean mapped) {
 		String name = (mapped ? cls.getMappedName(true) : cls.getName()) + ".class";
-		Options options = new GetOptParser().parse(new String[] { name }, OptionsImpl.getFactory());
+		Options options = new GetOptParser().parse(new String[] {"--renameillegalidents", "true", "--forcetopsort", "true", name }, OptionsImpl.getFactory());
 		ClassFileSource source = new ClassFileSource() {
 			@Override
 			public void informAnalysisRelativePathDetail(String usePath, String specPath) {
 				if (!usePath.equals(specPath)) {
-					System.out.println("informAnalysisRelativePathDetail: "+specPath+" -> "+usePath);
+					if (Util.DEBUG)
+						System.out.println("informAnalysisRelativePathDetail: "+specPath+" -> "+usePath);
 					nameMap.put(specPath, usePath);
 				}
 			}

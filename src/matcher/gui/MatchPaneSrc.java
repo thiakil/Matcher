@@ -229,6 +229,15 @@ public class MatchPaneSrc extends SplitPane implements IFwdGuiComponent, ISelect
 	}
 
 	@Override
+	public void linkClicked(String unMappedName) {
+		classList.getItems().forEach(instance -> {
+			if (instance.getName().equals(unMappedName)){
+				classList.getSelectionModel().select(instance);
+			}
+		});
+	}
+
+	@Override
 	public void onProjectChange() {
 		updateLists(true);
 

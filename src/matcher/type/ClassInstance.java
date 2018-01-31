@@ -4,6 +4,7 @@ import java.net.URI;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -12,11 +13,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.ClassNode;
 
 import matcher.Util;
+import org.objectweb.asm.tree.FieldNode;
+import org.objectweb.asm.tree.InnerClassNode;
+import org.objectweb.asm.tree.MethodNode;
 
 public class ClassInstance implements IMatchable<ClassInstance> {
 	/**
@@ -142,7 +148,37 @@ public class ClassInstance implements IMatchable<ClassInstance> {
 		if (asmNodes == null) return null;
 		if (asmNodes.length == 1) return asmNodes[0];
 
-		return asmNodes[0]; // TODO: actually merge
+		ClassNode mergedNode = new ClassNode();
+		asmNodes[0].accept(mergedNode);
+
+		List<String> baseMethodNames = mergedNode.methods.stream().map(n->n.name+n.desc).collect(Collectors.toList());
+		List<String> baseFieldNames = mergedNode.fields.stream().map(f->f.name+f.desc).collect(Collectors.toList());
+		List<String> innerClasses = mergedNode.innerClasses.stream().map(ic->ic.name).collect(Collectors.toList());
+
+		for (int i = 0; i < asmNodes.length; i++){
+			for (FieldNode f : asmNodes[i].fields){
+				if (!baseFieldNames.contains(f.name+f.desc)){
+					mergedNode.fields.add(f);
+					baseFieldNames.add(f.name+f.desc);
+				}
+			}
+
+			for (MethodNode m : asmNodes[i].methods){
+				if (!baseMethodNames.contains(m.name+m.desc)){
+					mergedNode.methods.add(m);
+					baseMethodNames.add(m.name+m.desc);
+				}
+			}
+
+			for (InnerClassNode innerClassNode : asmNodes[i].innerClasses){
+				if (!innerClasses.contains(innerClassNode.name)){
+					innerClassNode.accept(mergedNode);
+					innerClasses.add(innerClassNode.name);
+				}
+			}
+		}
+
+		return mergedNode;
 	}
 
 	void addAsmNode(ClassNode node) {
@@ -644,6 +680,14 @@ public class ClassInstance implements IMatchable<ClassInstance> {
 			return matchedClass.mappedName;
 		} else if (elementClass != null) {
 			return elementClass.getMappedName(defaultToUnmapped);
+		} else if (this.outerClass != null && outerClass != this && outerClass.hasMappedName()){
+			String myName = getName();
+			String outerMapped = this.outerClass.getMappedName(true);
+			String outerUnMapped = this.outerClass.getName();
+			if (myName.startsWith(outerUnMapped)){
+				myName = outerMapped+myName.substring(outerUnMapped.length());
+			}
+			return myName;
 		} else if (defaultToUnmapped) {
 			return getName();
 		} else {
@@ -799,6 +843,14 @@ public class ClassInstance implements IMatchable<ClassInstance> {
 		fields[fields.length - 1] = field;
 	}
 
+	void addAnnotation(String annotation){
+		this.annotations.add(annotation);
+	}
+
+	public Set<String> getAnnotations(){
+		return annotations;
+	}
+
 	public static String getId(String name) {
 		if (name.isEmpty()) throw new IllegalArgumentException("empty class name");
 		assert name.charAt(name.length() - 1) != ';' || name.charAt(0) == '[' : name;
@@ -814,6 +866,10 @@ public class ClassInstance implements IMatchable<ClassInstance> {
 
 	public static String getName(String id) {
 		return id.startsWith("L") ? id.substring(1, id.length() - 1) : id;
+	}
+
+	public Map<String, String> getEnumValues() {
+		return enumValues;
 	}
 
 	private static final ClassInstance[] noArrays = new ClassInstance[0];
@@ -847,8 +903,10 @@ public class ClassInstance implements IMatchable<ClassInstance> {
 	final Set<FieldInstance> fieldTypeRefs = Util.newIdentityHashSet();
 
 	final Set<String> strings = new HashSet<>();
+	final Map<String,String> enumValues = new HashMap<>();//REAL enum values, pulled from java.lang.Enum's constructor param
 
 	String mappedName;
 	String mappedComment;
 	ClassInstance matchedClass;
+	final Set<String> annotations = new TreeSet<>(Comparator.naturalOrder());
 }

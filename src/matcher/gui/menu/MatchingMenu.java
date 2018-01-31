@@ -38,6 +38,14 @@ public class MatchingMenu extends Menu {
 				() -> gui.onMatchChange(EnumSet.allOf(MatchType.class)),
 				Throwable::printStackTrace));
 
+		menuItem = new MenuItem("Auto perfect enum match");
+		getItems().add(menuItem);
+		menuItem.setOnAction(event -> gui.runProgressTask(
+				"Auto matching enums...",
+				gui.getMatcher()::autoMatchPerfectEnums,
+				() -> gui.onMatchChange(EnumSet.allOf(MatchType.class)),
+				Throwable::printStackTrace));
+
 		menuItem = new MenuItem("Auto method match");
 		getItems().add(menuItem);
 		menuItem.setOnAction(event -> gui.runProgressTask(
@@ -70,15 +78,9 @@ public class MatchingMenu extends Menu {
 	}
 
 	private void showMatchingStatus() {
-		MatchingStatus status = gui.getMatcher().getStatus(true);
+		String status = gui.getMatcher().getStringStatusSummary(true);
 
-		gui.showAlert(AlertType.INFORMATION, "Matching status", "Current matching status",
-				String.format("Classes: %d / %d (%.2f%%)%nMethods: %d / %d (%.2f%%)%nFields: %d / %d (%.2f%%)%nMethod args: %d / %d (%.2f%%)",
-						status.matchedClassCount, status.totalClassCount, (status.totalClassCount == 0 ? 0 : 100. * status.matchedClassCount / status.totalClassCount),
-						status.matchedMethodCount, status.totalMethodCount, (status.totalMethodCount == 0 ? 0 : 100. * status.matchedMethodCount / status.totalMethodCount),
-						status.matchedFieldCount, status.totalFieldCount, (status.totalFieldCount == 0 ? 0 : 100. * status.matchedFieldCount / status.totalFieldCount),
-						status.matchedMethodArgCount, status.totalMethodArgCount, (status.totalMethodArgCount == 0 ? 0 : 100. * status.matchedMethodArgCount / status.totalMethodArgCount)
-						));
+		gui.showAlert(AlertType.INFORMATION, "Matching status", "Current matching status", status);
 	}
 
 	private final Gui gui;

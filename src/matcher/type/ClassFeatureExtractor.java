@@ -5,6 +5,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
@@ -12,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.function.Predicate;
 
 import org.objectweb.asm.ClassWriter;
@@ -21,6 +23,7 @@ import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.InvokeDynamicInsnNode;
+import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.TypeInsnNode;
 
@@ -168,7 +171,8 @@ public class ClassFeatureExtractor implements IClassEnv {
 
 	private void processMethodInsns(MethodInstance method) {
 		if (method.asmNode == null) { // artificial method to capture calls to types with incomplete/unknown hierarchy/super type method info
-			System.out.println("skipping empty method "+method);
+			if (Util.DEBUG)
+				System.out.println("skipping empty method "+method);
 			return;
 		}
 
@@ -245,7 +249,8 @@ public class ClassFeatureExtractor implements IClassEnv {
 		MethodInstance dst = owner.resolveMethod(name, desc, toInterface);
 
 		if (dst == null) { // presumably a method in (super)type missing from the configured class path
-			System.out.println("creating synthetic method "+rawOwner+"/"+name+desc);
+			if (Util.DEBUG)
+				System.out.println("creating synthetic method "+rawOwner+"/"+name+desc);
 
 			dst = new MethodInstance(owner, name, desc, isStatic);
 			owner.addMethod(dst);
@@ -273,6 +278,25 @@ public class ClassFeatureExtractor implements IClassEnv {
 			checked.clear();
 		}
 	}
+
+	//Replaces references to accesses of the enum value with its actual value as passed to Enum's constructor
+	//leaves the enum itself alone to preserve decompilation
+	/*private void mungeEnumAccess(MethodInstance method){
+		if (method.getAsmNode() == null)
+			return;
+		Iterator<AbstractInsnNode> it = method.getAsmNode().instructions.iterator();
+		it.forEachRemaining(node->{
+			if (node.getOpcode() == Opcodes.GETSTATIC){
+				FieldInsnNode fieldNode = (FieldInsnNode)node;
+				if (!fieldNode.owner.equals(method.getCls().getName()) && this.enumClassValues.containsKey(fieldNode.owner)) {
+					Map<String, String> values = this.enumClassValues.get(fieldNode.owner);
+					if (values.containsKey(fieldNode.name)) {
+						fieldNode.name = values.get(fieldNode.name);
+					}
+				}
+			}
+		});
+	}*/
 
 	private void processMethod(MethodInstance method, Queue<ClassInstance> toCheck, Set<ClassInstance> checked) {
 		if (method.origName.equals("<init>") || method.origName.equals("<clinit>")) return;

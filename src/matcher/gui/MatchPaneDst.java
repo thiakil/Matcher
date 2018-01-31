@@ -152,6 +152,11 @@ public class MatchPaneDst extends SplitPane implements IFwdGuiComponent, ISelect
 	}
 
 	@Override
+	public void linkClicked(String unMappedName) {
+
+	}
+
+	@Override
 	public void onProjectChange() {
 		cmpClasses = gui.getEnv().getDisplayClassesB(!gui.isShowNonInputs());
 

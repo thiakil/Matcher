@@ -3,16 +3,21 @@ package matcher.classifier;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.InsnList;
+import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 
@@ -23,6 +28,7 @@ import matcher.type.ClassInstance;
 import matcher.type.FieldInstance;
 import matcher.type.MethodInstance;
 import matcher.type.MethodVarInstance;
+import org.objectweb.asm.tree.TypeInsnNode;
 
 public class ClassClassifier {
 	public static void init() {
@@ -48,6 +54,7 @@ public class ClassClassifier {
 		addClassifier(numericConstants, 6);
 		addClassifier(membersFull, 10, ClassifierLevel.Full, ClassifierLevel.Extra);
 		addClassifier(inRefsBci, 6, ClassifierLevel.Extra);
+		addClassifier(classAnnotations, 5);
 	}
 
 	private static void addClassifier(AbstractClassifier classifier, double weight, ClassifierLevel... levels) {
@@ -75,7 +82,7 @@ public class ClassClassifier {
 	private static AbstractClassifier classTypeCheck = new AbstractClassifier("class type check") {
 		@Override
 		public double getScore(ClassInstance clsA, ClassInstance clsB, ClassEnvironment env) {
-			int mask = Opcodes.ACC_ENUM | Opcodes.ACC_INTERFACE | Opcodes.ACC_ANNOTATION | Opcodes.ACC_ABSTRACT;
+			int mask = Opcodes.ACC_ENUM | Opcodes.ACC_INTERFACE | Opcodes.ACC_ANNOTATION | Opcodes.ACC_ABSTRACT /*| Opcodes.ACC_SYNTHETIC*/;
 			int resultA = clsA.getAccess() & mask;
 			int resultB = clsB.getAccess() & mask;
 
@@ -487,6 +494,13 @@ public class ClassClassifier {
 			} else {
 				return (double) matched / (matched + mismatched);
 			}
+		}
+	};
+
+	private static AbstractClassifier classAnnotations = new AbstractClassifier("class annotations") {
+		@Override
+		public double getScore(ClassInstance a, ClassInstance b, ClassEnvironment env) {
+			return ClassifierUtil.compareSets(a.getAnnotations(), b.getAnnotations(), true);
 		}
 	};
 

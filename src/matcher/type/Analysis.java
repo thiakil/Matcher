@@ -1137,13 +1137,15 @@ class Analysis {
 
 		lvToVar = null;
 
-		System.out.println("Local vars raw:");
+		if (Util.DEBUG) {
+			System.out.println("Local vars raw:");
 
-		for (int i = 0; i < varCount; i++) {
-			ExecState state = rec.getState(startIndices[i]);
+			for (int i = 0; i < varCount; i++) {
+				ExecState state = rec.getState(startIndices[i]);
 
-			System.out.printf("  %d: LV %d @ %d - %d: %s\t\t(%s)%n",
-					i, varToLv[i], startIndices[i], endIndices[i], state.locals[varToLv[i]].toString(), rec.varSources[state.localVarIds[varToLv[i]] - 1].name());
+				System.out.printf("  %d: LV %d @ %d - %d: %s\t\t(%s)%n",
+						i, varToLv[i], startIndices[i], endIndices[i], state.locals[varToLv[i]].toString(), rec.varSources[state.localVarIds[varToLv[i]] - 1].name());
+			}
 		}
 
 		// merge variables if they are adjacent and reachable without interruption, TODO: this currently only merges blocks that are reachable by the preceding block, the other way is also possible
@@ -2112,7 +2114,7 @@ class Analysis {
 		//System.out.println();
 	}
 
-	private static int getStackDemand(AbstractInsnNode ain, Frame<?> frame) {
+	private static int getStackDemand(AbstractInsnNode ain, Frame frame) {
 		switch (ain.getType()) {
 		case AbstractInsnNode.INSN:
 			switch (ain.getOpcode()) {

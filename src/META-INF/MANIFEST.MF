@@ -1,0 +1,4 @@
+Manifest-Version: 1.0
+Class-Path: ow-asm-all-6.0.jar jopt-simple-5.0.4.jar
+Main-Class: matcher.ConsoleMatcher
+

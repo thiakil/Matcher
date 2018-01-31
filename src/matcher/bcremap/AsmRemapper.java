@@ -13,6 +13,16 @@ public class AsmRemapper extends Remapper {
 		this.env = env;
 	}
 
+	public static String fixName(String name){
+		switch (name) {
+			case "do":
+				return "do_";
+			case "if":
+				return "if_";
+		}
+		return name;
+	}
+
 	@Override
 	public String map(String typeName) {
 		ClassInstance cls = env.getClsByName(typeName);
@@ -29,7 +39,7 @@ public class AsmRemapper extends Remapper {
 		FieldInstance field = cls.resolveField(name, desc);
 		if (field == null) return name;
 
-		return field.getMappedName(true);
+		return fixName(field.getMappedName(true));
 	}
 
 	@Override
@@ -44,7 +54,7 @@ public class AsmRemapper extends Remapper {
 			return name;
 		}
 
-		return method.getMappedName(true);
+		return fixName(method.getMappedName(true));
 	}
 
 	public String mapMethodName(String owner, String name, String desc, boolean itf) {
@@ -54,7 +64,7 @@ public class AsmRemapper extends Remapper {
 		MethodInstance method = cls.resolveMethod(name, desc, itf);
 		if (method == null) return name;
 
-		return method.getMappedName(true);
+		return fixName(method.getMappedName(true));
 	}
 
 	public String mapArbitraryInvokeDynamicMethodName(String owner, String name) {

@@ -38,6 +38,7 @@ public class MethodClassifier {
 		addClassifier(position, 3);
 		addClassifier(code, 12, ClassifierLevel.Full, ClassifierLevel.Extra);
 		addClassifier(inRefsBci, 6, ClassifierLevel.Extra);
+		addClassifier(methodAnnotation, 2);
 	}
 
 	private static void addClassifier(AbstractClassifier classifier, double weight, ClassifierLevel... levels) {
@@ -297,6 +298,13 @@ public class MethodClassifier {
 			} else {
 				return (double) matched / (matched + mismatched);
 			}
+		}
+	};
+
+	private static AbstractClassifier methodAnnotation = new AbstractClassifier("method annotations") {
+		@Override
+		public double getScore(MethodInstance a, MethodInstance b, ClassEnvironment env) {
+			return ClassifierUtil.compareSets(a.getAnnotations(), b.getAnnotations(), true);
 		}
 	};
 

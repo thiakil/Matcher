@@ -1,6 +1,10 @@
 package matcher.type;
 
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.io.UncheckedIOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -16,17 +20,31 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.DoubleConsumer;
 
+import matcher.FernFlowerDecompiler;
 import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassVisitor;
+import org.objectweb.asm.FieldVisitor;
+import org.objectweb.asm.Label;
+import org.objectweb.asm.MethodVisitor;
+import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
+import org.objectweb.asm.tree.AbstractInsnNode;
+import org.objectweb.asm.tree.AnnotationNode;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.InnerClassNode;
+import org.objectweb.asm.tree.LdcInsnNode;
+import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 
 import matcher.CfrIf;
@@ -34,6 +52,9 @@ import matcher.ProjectConfig;
 import matcher.Util;
 import matcher.classifier.ClassifierUtil;
 import matcher.classifier.MatchingCache;
+import org.objectweb.asm.tree.TypeInsnNode;
+import org.objectweb.asm.util.Textifier;
+import org.objectweb.asm.util.TraceClassVisitor;
 
 public class ClassEnvironment implements IClassEnv {
 	public void init(ProjectConfig config, DoubleConsumer progressReceiver) {
@@ -212,7 +233,7 @@ public class ClassEnvironment implements IClassEnv {
 		List<ClassInstance> ret = new ArrayList<>();
 
 		for (ClassInstance cls : extractor.getClasses().values()) {
-			if (cls.getUri() == null || inputsOnly && !cls.isInput()) continue;
+			if (cls.getUri() == null || (inputsOnly && !cls.isInput()) ) continue;
 
 			ret.add(cls);
 		}
@@ -259,7 +280,14 @@ public class ClassEnvironment implements IClassEnv {
 			throw new IllegalArgumentException("unknown class: "+cls);
 		}
 
-		return CfrIf.decompile(cls, extractor, mapped);
+		//return CfrIf.decompile(cls, extractor, mapped);
+		try {
+			return FernFlowerDecompiler.decompile(cls, extractor, mapped);
+		} catch (Exception e) {
+			StringWriter sw = new StringWriter();
+			e.printStackTrace(new PrintWriter(sw));
+			return "Error: "+e.getMessage()+"\r\n"+sw.toString();
+		}
 	}
 
 	@Override
@@ -297,28 +325,39 @@ public class ClassEnvironment implements IClassEnv {
 	ClassInstance getMissingCls(String id, boolean createUnknown) {
 		if (id.length() > 1) {
 			String name = ClassInstance.getName(id);
+			InputStream is;
 			Path file = getSharedClassLocation(name);
+			URI uri;
 
-			if (file == null) {
-				URL url = ClassLoader.getSystemResource(name+".class");
-
-				if (url != null) {
-					file = getPath(url);
-				}
-			}
-
-			if (file != null) {
-				ClassNode cn = readClass(file);
-				ClassInstance cls = new ClassInstance(ClassInstance.getId(cn.name), file.toUri(), this, cn);
-				if (!cls.getId().equals(id)) throw new RuntimeException("mismatched cls id "+id+" for "+file+", expected "+name);
-
-				ClassInstance ret = addSharedCls(cls);
-
-				if (ret == cls) { // cls was added
-					processClassA(ret);
+			try {
+				if (file == null) {
+					URL url = ClassLoader.getSystemResource(name + ".class");
+					if (url == null){
+						throw new IOException();
+					}
+					uri = url.toURI();
+					is = url.openStream();
+				} else {
+					is = new FileInputStream(file.toFile());
+					uri = file.toUri();
 				}
 
-				return ret;
+				if (is != null) {
+					ClassNode cn = readClass(is);
+					ClassInstance cls = new ClassInstance(ClassInstance.getId(cn.name), uri, this, cn);
+					if (!cls.getId().equals(id))
+						throw new RuntimeException("mismatched cls id " + id + " for " + file + ", expected " + name);
+
+					ClassInstance ret = addSharedCls(cls);
+
+					if (ret == cls) { // cls was added
+						processClassA(ret);
+					}
+
+					return ret;
+				}
+			} catch (IOException|URISyntaxException e){
+				//ignored, pls continue
 			}
 		}
 
@@ -352,15 +391,54 @@ public class ClassEnvironment implements IClassEnv {
 		}
 	}
 
-	static ClassNode readClass(Path path) {
+	static ClassNode readClass(InputStream is) {
 		try {
-			ClassReader reader = new ClassReader(Files.readAllBytes(path));
+			ClassReader reader = new ClassReader(is);
 			ClassNode cn = new ClassNode();
-			reader.accept(cn, ClassReader.EXPAND_FRAMES);
+			reader.accept(new LVTFixer(cn), /*ClassReader.EXPAND_FRAMES*/0);
 
 			return cn;
 		} catch (IOException e) {
 			throw new UncheckedIOException(e);
+		}
+	}
+
+	static ClassNode readClass(Path path) {
+		try {
+			ClassReader reader = new ClassReader(Files.readAllBytes(path));
+			ClassNode cn = new ClassNode();
+			reader.accept(new LVTFixer(cn), /*ClassReader.EXPAND_FRAMES*/0);
+
+			return cn;
+		} catch (IOException e) {
+			throw new UncheckedIOException(e);
+		}
+	}
+
+	public static class LVTFixer extends ClassVisitor{
+		public LVTFixer(ClassVisitor parent){
+			super(Opcodes.ASM5, parent);
+		}
+
+		@Override
+		public MethodVisitor visitMethod(int methodAccess, String name, String desc, String signature, String[] exceptions) {
+			MethodVisitor mv = super.visitMethod(methodAccess, name, desc, signature, exceptions);
+			return new MethodVisitor(Opcodes.ASM5, mv) {
+				private int lvtIndex = 0;
+				private int numParams = Type.getArgumentTypes(desc).length + (((methodAccess & Opcodes.ACC_STATIC) == 0) ? 1 : 0);
+
+				@Override//nuke the LVT if junk
+				public void visitLocalVariable(String name, String desc, String signature, Label start, Label end, int index) {
+					if (/*!name.startsWith("this")name.length() == 1 && */name.charAt(0) > 'z'){
+						if (index < numParams){
+							name = "param"+(lvtIndex++);
+						} else {
+							name = "var"+(lvtIndex++);
+						}
+					}
+					super.visitLocalVariable(name, desc, signature, start, end, index);
+				}
+			};
 		}
 	}
 
@@ -381,6 +459,9 @@ public class ClassEnvironment implements IClassEnv {
 					cls.addMethod(new MethodInstance(cls, mn.name, mn.desc, mn, nameObfuscated, i));
 
 					ClassifierUtil.extractStrings(mn.instructions, strings);
+					if (cls.isEnum() && mn.name.equals("<clinit>")){
+						processEnumClass(cls, mn);
+					}
 				}
 			}
 
@@ -407,6 +488,53 @@ public class ClassEnvironment implements IClassEnv {
 				ClassInstance ifCls = cls.getEnv().getCreateClassInstance(ClassInstance.getId(iface));
 
 				if (cls.interfaces.add(ifCls)) ifCls.implementers.add(cls);
+			}
+
+			if (cn.visibleAnnotations != null) {
+				for (AnnotationNode an : cn.visibleAnnotations) {
+					cls.annotations.add(buildAnnotationString(an));
+				}
+			}
+
+			if (cn.invisibleAnnotations != null) {
+				for (AnnotationNode an : cn.invisibleAnnotations) {
+					cls.annotations.add(buildAnnotationString(an));
+				}
+			}
+		}
+	}
+
+	public static String buildAnnotationString(AnnotationNode an){
+		StringWriter sw = new StringWriter();
+		ClassVisitor cv = new TraceClassVisitor(null, new PrintWriter(sw));
+		an.accept(cv.visitAnnotation(an.desc, true));
+		return sw.toString();
+	}
+
+	private static void processEnumClass(ClassInstance cls, MethodNode method){
+		Map<String,String> fieldMap = cls.enumValues;
+		Iterator<AbstractInsnNode> it = method.instructions.iterator();
+		while (it.hasNext()){
+			AbstractInsnNode node = it.next();
+			if (node instanceof TypeInsnNode && node.getOpcode() == Opcodes.NEW && ((TypeInsnNode) node).desc.equals(cls.getName())){
+				it.next();
+				AbstractInsnNode name = it.next();
+				if (!(name instanceof LdcInsnNode) || !(((LdcInsnNode) name).cst instanceof String)){
+					continue;
+				}
+				String valueName = (String)((LdcInsnNode) name).cst;
+				while (!(node instanceof MethodInsnNode && node.getOpcode() == Opcodes.INVOKESPECIAL) && it.hasNext()){
+					node = it.next();
+				}
+				if (!(node instanceof MethodInsnNode) || !it.hasNext()){
+					continue;
+				}
+				node = it.next();//we want the put field instruction after the constructor
+				if (!(node instanceof FieldInsnNode && node.getOpcode() == Opcodes.PUTSTATIC && ((FieldInsnNode) node).owner.equals(cls.getName()))){
+					continue;//if the bytecode is doing weird shit, we dont want it.
+				}
+				String actualFieldName = ((FieldInsnNode) node).name;
+				fieldMap.put(actualFieldName, valueName);
 			}
 		}
 	}

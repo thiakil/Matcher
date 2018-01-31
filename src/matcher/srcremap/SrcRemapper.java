@@ -20,6 +20,7 @@ import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParseProblemException;
 import com.github.javaparser.Position;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.DataKey;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Modifier;
 import com.github.javaparser.ast.Node;
@@ -39,7 +40,13 @@ import com.github.javaparser.ast.comments.BlockComment;
 import com.github.javaparser.ast.comments.Comment;
 import com.github.javaparser.ast.comments.JavadocComment;
 import com.github.javaparser.ast.expr.AnnotationExpr;
+import com.github.javaparser.ast.expr.ClassExpr;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.FieldAccessExpr;
+import com.github.javaparser.ast.expr.MethodReferenceExpr;
+import com.github.javaparser.ast.expr.Name;
+import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.ast.expr.TypeExpr;
 import com.github.javaparser.ast.nodeTypes.NodeWithTypeArguments;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.CatchClause;
@@ -63,6 +70,7 @@ import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.printer.PrettyPrintVisitor;
 import com.github.javaparser.printer.PrettyPrinterConfiguration;
 
+import matcher.Util;
 import matcher.type.ClassInstance;
 import matcher.type.FieldInstance;
 import matcher.type.IClassEnv;
@@ -79,9 +87,7 @@ public class SrcRemapper {
 		}
 	}
 
-	public static String decorate(String src, ClassInstance cls, boolean mapped) {
-		Context context = new Context(cls.getEnv(), mapped);
-
+	private static String fixOuterClass(String src, ClassInstance cls, Context context) {
 		if (cls.getOuterClass() != null) {
 			// replace <outer>.<inner> with <outer>$<inner> since . is not a legal identifier within class names and thus gets rejected by JavaParser
 
@@ -107,6 +113,12 @@ public class SrcRemapper {
 				}
 			}
 		}
+		return src;
+	}
+
+	private static CompilationUnit parse(String src, Context context, ClassInstance cls){
+
+		src = fixOuterClass(src, cls, context);
 
 		CompilationUnit cu;
 
@@ -118,7 +130,26 @@ public class SrcRemapper {
 
 		cu.accept(remapVisitor, context);
 
+		return cu;
+	}
+
+	public static String decorate(String src, ClassInstance cls, boolean mapped) {
+		Context context = new Context(cls.getEnv(), mapped);
+
+		CompilationUnit cu = parse(src, context, cls);
+
 		PrettyPrintVisitor printer = new Printer(new PrettyPrinterConfiguration().setIndent("\t").setEndOfLineCharacter("\n"));
+		cu.accept(printer, null);
+
+		return printer.getSource();
+	}
+
+	public static String decorateHTML(String src, ClassInstance cls, boolean mapped) {
+		Context context = new Context(cls.getEnv(), mapped);
+
+		CompilationUnit cu = parse(src, context, cls);
+
+		PrettyPrintVisitor printer = new HTMLPrinter(new PrettyPrinterConfiguration().setIndent("\t").setEndOfLineCharacter("\n"));
 		cu.accept(printer, null);
 
 		return printer.getSource();
@@ -256,6 +287,8 @@ public class SrcRemapper {
 		}
 	}
 
+	private static final DataKey<ClassInstance> CLASS_INSTANCE_KEY = new DataKey<ClassInstance>() {};
+
 	private static class Context {
 		public Context(IClassEnv env, boolean mapped) {
 			this.env = env;
@@ -263,7 +296,12 @@ public class SrcRemapper {
 		}
 
 		public ClassInstance getClsByName(String name) {
-			return mapped ? env.getClsByMappedName(name) : env.getClsByName(name);
+			if (mapped){
+				ClassInstance i = env.getClsByMappedName(name);
+				if (i != null)
+					return i;
+			}
+			return env.getClsByName(name);
 		}
 
 		public String getName(IMatchable<?> e) {
@@ -301,6 +339,10 @@ public class SrcRemapper {
 					int pos = name.lastIndexOf('.');
 
 					if (pos != -1) arg.imports.put(name.substring(pos + 1), name.replace('.', '/'));
+					ClassInstance impIns = arg.getClsByName(name.replace('.', '/'));
+					if (impIns != null && impIns.isInput()) {
+						imp.getName().setData(CLASS_INSTANCE_KEY, impIns);
+					}
 				}
 			}
 
@@ -324,9 +366,13 @@ public class SrcRemapper {
 		private void visitCls(TypeDeclaration<?> n, Context arg) {
 			String name = n.getName().getIdentifier();
 			if (arg.pkg != null) name = arg.pkg+"."+name;
+			if (n.getParentNode().isPresent() && n.getParentNode().get() instanceof TypeDeclaration){
+				name = (arg.pkg != null ? arg.pkg+"." : "") + ((TypeDeclaration) n.getParentNode().get()).getName().getIdentifier()+"$"+n.getName().getIdentifier();
+			}
 
 			ClassInstance cls = arg.getClsByName(name.replace('.', '/'));
-			System.out.println("cls "+n.getName().getIdentifier()+" = "+cls+" at "+n.getRange());
+			if (Util.DEBUG)
+				System.out.println("cls "+n.getName().getIdentifier()+" = "+cls+" at "+n.getRange());
 
 			handleComment(cls.getMappedComment(), n);
 
@@ -368,7 +414,8 @@ public class SrcRemapper {
 	private static final VoidVisitorAdapter<Context> clsRemapVisitor = new VoidVisitorAdapter<Context>() {
 		@Override
 		public void visit(ClassOrInterfaceDeclaration n, Context arg) {
-			throw new IllegalStateException();
+			//throw new IllegalStateException();
+			remapVisitor.visit(n, arg);
 		}
 
 		@Override
@@ -377,17 +424,30 @@ public class SrcRemapper {
 			sb.append('(');
 
 			for (Parameter p : n.getParameters()) {
-				sb.append(toDesc(p.getType(), arg));
+				String desc = toDesc(p.getType(), arg);
+				sb.append(desc);
+				if (p.getType().isClassOrInterfaceType()){
+					ClassInstance classInstance = arg.mapped ? arg.env.getClsByMappedId(desc) : arg.env.getClsById(desc);
+					if (classInstance != null && classInstance != arg.cls && classInstance.isInput())
+						p.getType().setData(CLASS_INSTANCE_KEY, classInstance);
+				}
 			}
 
 			sb.append(')');
-			sb.append(toDesc(n.getType(), arg));
+			String retDesc = toDesc(n.getType(), arg);
+			sb.append(retDesc);
+			if (n.getType().isClassOrInterfaceType()){
+				ClassInstance classInstance = arg.mapped ? arg.env.getClsByMappedId(retDesc) : arg.env.getClsById(retDesc);
+				if (classInstance != null && classInstance != arg.cls && classInstance.isInput())
+					n.getType().setData(CLASS_INSTANCE_KEY, classInstance);
+			}
 
 			String name = n.getName().getIdentifier();
 			String desc = sb.toString();
 			MethodInstance m = arg.mapped ? arg.cls.getMappedMethod(name, desc) : arg.cls.getMethod(name, desc);
 
-			System.out.println("mth "+n.getName().getIdentifier()+" = "+m+" at "+n.getRange());
+			if (Util.DEBUG)
+				System.out.println("mth "+n.getName().getIdentifier()+" = "+m+" at "+n.getRange());
 
 			if (m != null) {
 				/*if (m.hasMappedName()) {
@@ -395,7 +455,7 @@ public class SrcRemapper {
 				}*/
 
 				handleComment(m.getMappedComment(), n);
-			} else {
+			} else if (Util.DEBUG) {
 				System.out.println("(not found)");
 			}
 
@@ -416,7 +476,14 @@ public class SrcRemapper {
 				String desc = toDesc(v.getType(), arg);
 				FieldInstance f = arg.mapped ? arg.cls.getMappedField(name, desc) : arg.cls.getField(name, desc);
 
-				System.out.println("fld "+v.getName().getIdentifier()+" = "+f+" at "+v.getRange());
+				if (v.getType().isClassOrInterfaceType()){
+					ClassInstance classInstance = arg.mapped ? arg.env.getClsByMappedId(desc) : arg.env.getClsById(desc);
+					if (classInstance != null && classInstance != arg.cls && classInstance.isInput())
+						v.getType().setData(CLASS_INSTANCE_KEY, classInstance);
+				}
+
+				if (Util.DEBUG)
+					System.out.println("fld "+v.getName().getIdentifier()+" = "+f+" at "+v.getRange());
 
 				if (f != null) {
 					/*if (f.hasMappedName()) {
@@ -428,7 +495,8 @@ public class SrcRemapper {
 						comments.add(f.getMappedComment());
 					}
 				} else {
-					System.out.println("(not found)");
+					if (Util.DEBUG)
+						System.out.println(" (not found)");
 				}
 			}
 
@@ -441,6 +509,44 @@ public class SrcRemapper {
 			/*n.getVariables().forEach(p -> p.accept(this, arg));
 			n.getAnnotations().forEach(p -> p.accept(this, arg));*/
 		}
+
+		@Override
+		public void visit(FieldAccessExpr n, Context arg) {
+			ClassInstance owner = null;
+			if (n.getScope().isNameExpr()){
+				String name = n.getScope().asNameExpr().getName().asString();
+				if (arg.imports.containsKey(name)){
+					name = arg.imports.get(name);
+				}
+				owner = arg.mapped ? arg.env.getClsByMappedName(name) : arg.getClsByName(name);
+				if (owner != null && owner.isInput()){//for use in printer
+					n.getScope().setData(SrcRemapper.CLASS_INSTANCE_KEY, owner);
+				}
+			} else if (n.getScope().isThisExpr()){
+				owner = arg.cls;
+			}
+			if (owner != null && owner.isEnum()){
+				if (owner.getEnumValues().containsKey(n.getName().asString())){
+					//n.getName().setIdentifier(owner.getEnumValues().get(n.getName().asString()));
+					n.setComment(new BlockComment(owner.getEnumValues().get(n.getName().asString())));
+				}
+			}
+			super.visit(n, arg);
+		}
+
+		@Override
+		public void visit(ClassOrInterfaceType n, Context arg) {
+			super.visit(n, arg);
+			ClassInstance cls = arg.getClsByName(n.getNameAsString());
+			if (cls == null && n.getNameAsString().contains(".")){
+				cls = arg.getClsByName(n.getNameAsString().replaceAll("\\.", "/"));
+			}
+			if (cls != null && cls != arg.cls && cls.isInput()){
+				n.setData(CLASS_INSTANCE_KEY, cls);
+			}
+		}
+
+
 
 		/*@Override
 		public void visit(MethodCallExpr n, Context arg) {
@@ -515,7 +621,10 @@ public class SrcRemapper {
 
 			printer.print("/*");
 			printMultiLine(n.getContent());
-			printer.println("*/");
+			if (n.getContent().contains(" "))
+				printer.println("*/");
+			else
+				printer.print("*/");
 		}
 
 		@Override
@@ -908,7 +1017,7 @@ public class SrcRemapper {
 		private void printMembers(final NodeList<BodyDeclaration<?>> members, final Void arg) {
 			BodyDeclaration<?> prev = null;
 
-			members.sort((a, b) -> {
+			/*members.sort((a, b) -> {
 				if (a instanceof FieldDeclaration && b instanceof CallableDeclaration) {
 					return 1;
 				} else if (b instanceof FieldDeclaration && a instanceof CallableDeclaration) {
@@ -920,7 +1029,7 @@ public class SrcRemapper {
 				} else {
 					return 0;
 				}
-			});
+			});*/
 
 			for (final BodyDeclaration<?> member : members) {
 				if (prev != null && (!prev.isFieldDeclaration() || !member.isFieldDeclaration())) printer.println();
@@ -1033,7 +1142,7 @@ public class SrcRemapper {
 		}
 
 		private void printJavaComment(final Optional<Comment> javacomment, final Void arg) {
-			if (configuration.isPrintJavaDoc()) {
+			/*if (configuration.isPrintJavaDoc())*/ {
 				javacomment.ifPresent(c -> c.accept(this, arg));
 			}
 		}
@@ -1089,6 +1198,52 @@ public class SrcRemapper {
 			}
 			for (int i = 0; i < commentsAtEnd; i++) {
 				everything.get(everything.size() - commentsAtEnd + i).accept(this, null);
+			}
+		}
+	}
+
+	private static class HTMLPrinter extends Printer{
+
+		public HTMLPrinter(PrettyPrinterConfiguration prettyPrinterConfiguration) {
+			super(prettyPrinterConfiguration);
+		}
+
+		@Override
+		public void visit(NameExpr n, Void arg) {
+			if (n.getData(SrcRemapper.CLASS_INSTANCE_KEY) != null){
+				printer.print("\\<a href=\"");
+				printer.print(n.getData(SrcRemapper.CLASS_INSTANCE_KEY).getName());
+				printer.print("\"\\>");
+			}
+			super.visit(n, arg);
+			if (n.getData(SrcRemapper.CLASS_INSTANCE_KEY) != null){
+				printer.print("\\</a\\>");
+			}
+		}
+
+		@Override
+		public void visit(Name n, Void arg) {
+			if (n.getData(SrcRemapper.CLASS_INSTANCE_KEY) != null){
+				printer.print("\\<a href=\"");
+				printer.print(n.getData(SrcRemapper.CLASS_INSTANCE_KEY).getName());
+				printer.print("\"\\>");
+			}
+			super.visit(n, arg);
+			if (n.getData(SrcRemapper.CLASS_INSTANCE_KEY) != null){
+				printer.print("\\</a\\>");
+			}
+		}
+
+		@Override
+		public void visit(ClassOrInterfaceType n, Void arg) {
+			if (n.getData(SrcRemapper.CLASS_INSTANCE_KEY) != null){
+				printer.print("\\<a href=\"");
+				printer.print(n.getData(SrcRemapper.CLASS_INSTANCE_KEY).getName());
+				printer.print("\"\\>");
+			}
+			super.visit(n, arg);
+			if (n.getData(SrcRemapper.CLASS_INSTANCE_KEY) != null){
+				printer.print("\\</a\\>");
 			}
 		}
 	}

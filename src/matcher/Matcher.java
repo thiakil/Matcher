@@ -11,6 +11,7 @@ import java.nio.file.StandardOpenOption;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -327,7 +328,7 @@ public class Matcher {
 				.collect(Collectors.toList());
 		if (classes.isEmpty()) return false;
 
-		try (Writer writer = Files.newBufferedWriter(path, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+		try (Writer writer = Files.newBufferedWriter(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
 			writer.write("Matches saved ");
 			writer.write(ZonedDateTime.now().toString());
 			writer.write(", input files:\n\ta:\n");
@@ -689,7 +690,8 @@ public class Matcher {
 		if (a.getMatch() == b) return;
 
 		String mappedName = a.getMappedName(false);
-		System.out.println("match class "+a+" -> "+b+(mappedName != null ? " ("+mappedName+")" : ""));
+		if (Util.DEBUG)
+			System.out.println("match class "+a+" -> "+b+(mappedName != null ? " ("+mappedName+")" : ""));
 
 		if (a.getMatch() != null) {
 			a.getMatch().setMatch(null);
@@ -775,7 +777,8 @@ public class Matcher {
 		if (a.getMatch() == b) return;
 
 		String mappedName = a.getMappedName(false);
-		System.out.println("match method "+a+" -> "+b+(mappedName != null ? " ("+mappedName+")" : ""));
+		if (Util.DEBUG)
+			System.out.println("match method "+a+" -> "+b+(mappedName != null ? " ("+mappedName+")" : ""));
 
 		if (a.getMatch() != null) a.getMatch().setMatch(null);
 		if (b.getMatch() != null) b.getMatch().setMatch(null);
@@ -815,7 +818,8 @@ public class Matcher {
 		if (a.getMatch() == b) return;
 
 		String mappedName = a.getMappedName(false);
-		System.out.println("match field "+a+" -> "+b+(mappedName != null ? " ("+mappedName+")" : ""));
+		if (Util.DEBUG)
+			System.out.println("match field "+a+" -> "+b+(mappedName != null ? " ("+mappedName+")" : ""));
 
 		if (a.getMatch() != null) a.getMatch().setMatch(null);
 		if (b.getMatch() != null) b.getMatch().setMatch(null);
@@ -834,7 +838,8 @@ public class Matcher {
 		if (a.getMatch() == b) return;
 
 		String mappedName = a.getMappedName(false);
-		System.out.println("match method arg "+a+" -> "+b+(mappedName != null ? " ("+mappedName+")" : ""));
+		if (Util.DEBUG)
+			System.out.println("match method arg "+a+" -> "+b+(mappedName != null ? " ("+mappedName+")" : ""));
 
 		if (a.getMatch() != null) a.getMatch().setMatch(null);
 		if (b.getMatch() != null) b.getMatch().setMatch(null);
@@ -850,7 +855,8 @@ public class Matcher {
 		if (cls.getMatch() == null) return;
 
 		String mappedName = cls.getMappedName(false);
-		System.out.println("unmatch class "+cls+" (was "+cls.getMatch()+")"+(mappedName != null ? " ("+mappedName+")" : ""));
+		if (Util.DEBUG)
+			System.out.println("unmatch class "+cls+" (was "+cls.getMatch()+")"+(mappedName != null ? " ("+mappedName+")" : ""));
 
 		cls.getMatch().setMatch(null);
 		cls.setMatch(null);
@@ -873,7 +879,8 @@ public class Matcher {
 		if (m.getMatch() == null) return;
 
 		String mappedName = m.getMappedName(false);
-		System.out.println("unmatch member "+m+" (was "+m.getMatch()+")"+(mappedName != null ? " ("+mappedName+")" : ""));
+		if (Util.DEBUG)
+			System.out.println("unmatch member "+m+" (was "+m.getMatch()+")"+(mappedName != null ? " ("+mappedName+")" : ""));
 
 		if (m instanceof MethodInstance) {
 			for (MethodVarInstance arg : ((MethodInstance) m).getArgs()) {
@@ -898,12 +905,56 @@ public class Matcher {
 		if (a.getMatch() == null) return;
 
 		String mappedName = a.getMappedName(false);
-		System.out.println("unmatch method var "+a+" (was "+a.getMatch()+")"+(mappedName != null ? " ("+mappedName+")" : ""));
+		if (Util.DEBUG)
+			System.out.println("unmatch method var "+a+" (was "+a.getMatch()+")"+(mappedName != null ? " ("+mappedName+")" : ""));
 
 		a.getMatch().setMatch(null);
 		a.setMatch(null);
 
 		env.getCache().clear();
+	}
+
+	public void autoMatchPerfectEnums(DoubleConsumer progressReceiver){
+		Predicate<ClassInstance> filter = cls -> cls.getUri() != null && cls.isEnum() && cls.isNameObfuscated(false) && cls.getMatch() == null;
+
+		List<ClassInstance> classes = env.getClassesA().stream()
+				.filter(filter)
+				.collect(Collectors.toList());
+
+		ClassInstance[] cmpClasses = env.getClassesB().stream()
+				.filter(filter).toArray(ClassInstance[]::new);
+
+		Map<ClassInstance, ClassInstance> matches = new ConcurrentHashMap<>(classes.size());
+
+		runInParallel(classes, cls -> {
+			Collection<String> valuesA = cls.getEnumValues().values();
+			for (ClassInstance b : cmpClasses){
+				Collection<String> valuesB = b.getEnumValues().values();
+				if (valuesA.containsAll(valuesB) && valuesB.containsAll(valuesA)){
+					matches.put(cls, b);
+				}
+			}
+		}, progressReceiver);
+
+		sanitizeMatches(matches);
+
+		//for each match, match their fields that correspond to the enum values
+		for (Map.Entry<ClassInstance, ClassInstance> classEntry : matches.entrySet()) {
+			match(classEntry.getKey(), classEntry.getValue());
+			Map<String,String> valuesA = classEntry.getKey().getEnumValues();
+			Map<String,String> valuesB = classEntry.getValue().getEnumValues();
+			for (Map.Entry<String,String> fieldAEntry : valuesA.entrySet()){
+				if (!valuesB.containsValue(fieldAEntry.getValue())){
+					System.out.println(classEntry.getKey()+" -> "+classEntry.getValue()+" did not contain match for "+fieldAEntry.getValue()+", THIS SHOULD NOT HAPPEN");
+					continue;
+				}
+				FieldInstance fieldA = classEntry.getKey().getField(fieldAEntry.getKey(), classEntry.getKey().getId());
+				FieldInstance fieldB = classEntry.getValue().getField(valuesB.entrySet().stream().filter(e->e.getValue().equals(fieldAEntry.getValue())).findFirst().orElseThrow(IllegalStateException::new).getKey(), classEntry.getValue().getId());
+				fieldA.setMatch(fieldB);
+			}
+		}
+
+		System.out.println("Auto matched "+matches.size()+" enums");
 	}
 
 	public void autoMatchAll(DoubleConsumer progressReceiver) {
@@ -952,8 +1003,7 @@ public class Matcher {
 				.collect(Collectors.toList());
 
 		ClassInstance[] cmpClasses = env.getClassesB().stream()
-				.filter(filter)
-				.collect(Collectors.toList()).toArray(new ClassInstance[0]);
+				.filter(filter).toArray(ClassInstance[]::new);
 
 		Map<ClassInstance, ClassInstance> matches = new ConcurrentHashMap<>(classes.size());
 
@@ -1196,6 +1246,16 @@ public class Matcher {
 		return new MatchingStatus(totalClassCount, matchedClassCount, totalMethodCount, matchedMethodCount, totalMethodArgCount, matchedMethodArgCount, totalFieldCount, matchedFieldCount);
 	}
 
+	public String getStringStatusSummary(boolean inputsOnly){
+		MatchingStatus status = getStatus(inputsOnly);
+		return String.format("Classes: %d / %d (%.2f%%)%nMethods: %d / %d (%.2f%%)%nFields: %d / %d (%.2f%%)%nMethod args: %d / %d (%.2f%%)",
+				status.matchedClassCount, status.totalClassCount, (status.totalClassCount == 0 ? 0 : 100. * status.matchedClassCount / status.totalClassCount),
+				status.matchedMethodCount, status.totalMethodCount, (status.totalMethodCount == 0 ? 0 : 100. * status.matchedMethodCount / status.totalMethodCount),
+				status.matchedFieldCount, status.totalFieldCount, (status.totalFieldCount == 0 ? 0 : 100. * status.matchedFieldCount / status.totalFieldCount),
+				status.matchedMethodArgCount, status.totalMethodArgCount, (status.totalMethodArgCount == 0 ? 0 : 100. * status.matchedMethodArgCount / status.totalMethodArgCount)
+		);
+	}
+
 	public boolean propagateNames(DoubleConsumer progressReceiver) {
 		int total = env.getClassesB().size();
 		int current = 0;
@@ -1268,6 +1328,21 @@ public class Matcher {
 		System.out.printf("Propagated %d method names, %d method arg names.", propagatedMethodNames, propagatedArgNames);
 
 		return propagatedMethodNames > 0 || propagatedArgNames > 0;
+	}
+
+	public void unMatchDuds(double absThreshold, double relThreshold, DoubleConsumer progressReceiver){
+		ClassInstance[] classes = env.getClassesA().stream().filter(cls->cls.getMatch()!=null).toArray(ClassInstance[]::new);
+		int removed = 0;
+		for (int i = 0; i<classes.length; i++){
+			progressReceiver.accept(i/(double)classes.length);
+			List<RankResult<ClassInstance>> ranking = ClassClassifier.rank(classes[i], new ClassInstance[]{classes[i].getMatch()}, ClassifierLevel.Full, env);
+
+			if (!checkRank(ranking, absThreshold, relThreshold)) {
+				unmatch(classes[i]);
+				removed++;
+			}
+		}
+		System.out.printf("Removed %d invalid matches\r\n", removed);
 	}
 
 	public static class MatchingStatus {

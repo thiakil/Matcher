@@ -1,11 +1,14 @@
 package matcher.type;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
+import org.objectweb.asm.tree.AnnotationNode;
 import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.LocalVariableNode;
 import org.objectweb.asm.tree.MethodNode;
@@ -34,6 +37,7 @@ public class MethodInstance extends MemberInstance<MethodInstance> {
 		this.args = gatherArgs(this, desc);
 		//this.vars = gatherVars(this);
 		this.retType = cls.getEnv().getCreateClassInstance(Type.getReturnType(desc).getDescriptor());
+		gatherAnnotations();
 		classRefs.add(retType);
 		retType.methodTypeRefs.add(this);
 	}
@@ -121,6 +125,23 @@ public class MethodInstance extends MemberInstance<MethodInstance> {
 
 		return ret.isEmpty() ? emptyVars : ret.toArray(new MethodVarInstance[0]);
 	}*/
+
+	private void gatherAnnotations(){
+		if (this.asmNode == null){
+			return;
+		}
+		if (this.asmNode.visibleAnnotations != null){
+			for (AnnotationNode n : this.asmNode.visibleAnnotations){
+				this.annotations.add(ClassEnvironment.buildAnnotationString(n));
+			}
+		}
+
+		if (this.asmNode.invisibleAnnotations != null){
+			for (AnnotationNode n : this.asmNode.invisibleAnnotations){
+				this.annotations.add(ClassEnvironment.buildAnnotationString(n));
+			}
+		}
+	}
 
 	@Override
 	public String getDisplayName(boolean full, boolean mapped) {
@@ -245,6 +266,10 @@ public class MethodInstance extends MemberInstance<MethodInstance> {
 		return classRefs;
 	}
 
+	public Set<String> getAnnotations() {
+		return annotations;
+	}
+
 	static String getId(String name, String desc) {
 		return name+desc;
 	}
@@ -261,4 +286,5 @@ public class MethodInstance extends MemberInstance<MethodInstance> {
 	final Set<FieldInstance> fieldReadRefs = Util.newIdentityHashSet();
 	final Set<FieldInstance> fieldWriteRefs = Util.newIdentityHashSet();
 	final Set<ClassInstance> classRefs = Util.newIdentityHashSet();
+	final Set<String> annotations = new TreeSet<>(Comparator.naturalOrder());
 }

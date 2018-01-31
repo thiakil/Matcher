@@ -214,10 +214,12 @@ public class AsmClassRemapper extends ClassRemapper {
 		public void visitLocalVariable(String name, String desc, String signature, Label start, Label end, int index) {
 			checkState();
 
-			int startInsn = labels.get(start);
-			int endInsn = labels.get(end);
+			if (labels.containsKey(start) && labels.containsKey(end)) {//not sure how, but it seems to happen
+				int startInsn = labels.get(start);
+				int endInsn = labels.get(end);
 
-			name = remapper.mapLocalVariableName(className, methodName, methodDesc, name, desc, index, startInsn, endInsn);
+				name = remapper.mapLocalVariableName(className, methodName, methodDesc, name, desc, index, startInsn, endInsn);
+			}
 
 			super.visitLocalVariable(name, desc, signature, start, end, index);
 		}

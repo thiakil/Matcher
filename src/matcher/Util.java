@@ -24,6 +24,8 @@ import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.MethodInsnNode;
 
 public class Util {
+	public static final boolean DEBUG = System.getProperty("matcher.debug") != null;
+
 	public static <T> Set<T> newIdentityHashSet() {
 		return Collections.newSetFromMap(new IdentityHashMap<>());//new IdentityHashSet<>();
 	}

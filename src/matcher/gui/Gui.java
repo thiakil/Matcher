@@ -10,6 +10,9 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.DoubleConsumer;
 
@@ -83,7 +86,7 @@ public class Gui extends Application {
 
 	@Override
 	public void stop() throws Exception {
-		threadPool.shutdown();
+		threadPool.shutdownNow();
 	}
 
 	public ClassEnvironment getEnv() {

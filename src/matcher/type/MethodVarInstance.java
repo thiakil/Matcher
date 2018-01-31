@@ -55,7 +55,7 @@ public class MethodVarInstance implements IMatchable<MethodVarInstance> {
 
 	@Override
 	public String getName() {
-		return origName;
+		return origName != null ? origName : "???";
 	}
 
 	@Override

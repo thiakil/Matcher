@@ -16,4 +16,6 @@ public interface ISelectionProvider {
 	default RankResult<?> getSelectedRankResult(MatchType type) {
 		return null;
 	}
+
+	void linkClicked(String unMappedName);
 }
