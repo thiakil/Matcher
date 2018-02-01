@@ -39,6 +39,7 @@ public class ClassInfoTab extends Tab implements IGuiComponent {
 		row = addRow("Access", accessLabel, grid, row);
 		row = addRow("Signature", sigLabel, grid, row);
 		row = addRow("Outer Class", outerLabel, grid, row);
+		row = addRow("Inner Classes", innersLabel, grid, row);
 		row = addRow("Super Class", superLabel, grid, row);
 		row = addRow("Sub Classes", subLabel, grid, row);
 		row = addRow("Interfaces", ifaceLabel, grid, row);
@@ -77,6 +78,7 @@ public class ClassInfoTab extends Tab implements IGuiComponent {
 			accessLabel.setText("-");
 			sigLabel.setText("-");
 			outerLabel.setText("-");
+			innersLabel.setText("-");
 			superLabel.setText("-");
 			subLabel.setText("-");
 			ifaceLabel.setText("-");
@@ -92,6 +94,7 @@ public class ClassInfoTab extends Tab implements IGuiComponent {
 			sigLabel.setText(asmNode == null || asmNode.signature == null ? "-" : asmNode.signature);
 
 			outerLabel.setText(cls.getOuterClass() != null ? getName(cls.getOuterClass()) : "-");
+			innersLabel.setText(format(cls.getInnerClasses()));
 			superLabel.setText(cls.getSuperClass() != null ? getName(cls.getSuperClass()) : "-");
 			subLabel.setText(cls.isInterface() ? "-" : format(cls.getChildClasses()));
 			ifaceLabel.setText(format(cls.getInterfaces()));
@@ -123,6 +126,7 @@ public class ClassInfoTab extends Tab implements IGuiComponent {
 	private final Label accessLabel = new Label();
 	private final Label sigLabel = new Label();
 	private final Label outerLabel = new Label();
+	private final Label innersLabel = new Label();
 	private final Label superLabel = new Label();
 	private final Label subLabel = new Label();
 	private final Label ifaceLabel = new Label();
