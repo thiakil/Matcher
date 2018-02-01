@@ -40,7 +40,7 @@ public class MethodArgClassifier {
 	private static AbstractClassifier type = new AbstractClassifier("type") {
 		@Override
 		public double getScore(MethodVarInstance argA, MethodVarInstance argB, ClassEnvironment env) {
-			return ClassifierUtil.checkPotentialEquality(argA.getType(), argB.getType()) ? 1 : 0;
+			return ClassifierUtil.checkPotentialEquality(argA.getType(), argB.getType(), false) ? 1 : 0;
 		}
 	};
 

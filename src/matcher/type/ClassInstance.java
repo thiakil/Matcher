@@ -292,6 +292,10 @@ public class ClassInstance implements IMatchable<ClassInstance> {
 	public boolean isAnnotation() {
 		return (getAccess() & Opcodes.ACC_ANNOTATION) != 0;
 	}
+	
+	public boolean isAnonymous() {
+		return getName().matches("\\$\\d+$");
+	}
 
 	public MethodInstance getMethod(String id) {
 		return methodIdx.get(id);

@@ -85,7 +85,7 @@ public class FieldClassifier {
 	private static AbstractClassifier type = new AbstractClassifier("types") {
 		@Override
 		public double getScore(FieldInstance fieldA, FieldInstance fieldB, ClassEnvironment env) {
-			return ClassifierUtil.checkPotentialEquality(fieldA.getType(), fieldB.getType()) ? 1 : 0;
+			return ClassifierUtil.checkPotentialEquality(fieldA.getType(), fieldB.getType(), false) ? 1 : 0;
 		}
 	};
 

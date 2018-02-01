@@ -89,6 +89,7 @@ public class ConsoleMatcher {
 
 		System.out.println("Loading inputs");
 		matcher.init(config, simpleProgressListener);
+		matcher.setAllowRematches(true);
 
 		if (options.has(seedFileOpt)){
 			Path seedFile = options.valueOf(seedFileOpt);
@@ -101,31 +102,33 @@ public class ConsoleMatcher {
 
 		System.out.println("Performing initial match (0.9)");
 		//matcher.autoMatchAll(simpleProgressListener);
-		autoMatchAll(env, matcher, 0.9, 0.085, simpleProgressListener);
+		autoMatchAll(env, matcher, 0.9, 0.045, simpleProgressListener);
 		System.out.println("Propagating names");
 		matcher.propagateNames(simpleProgressListener);
 
 		System.out.println("Checking duds");
-		matcher.unMatchDuds(0.9, 0.085, simpleProgressListener);
+		matcher.unMatchDuds(0.9, 0.045, simpleProgressListener);
 
 		int pass = 2;
 		double threshold = 0.9;
+		double relThreshold = 0.045;
 		String status;
 		do {
 			threshold-=0.1;
+			relThreshold += 0.005;
 			do {
 				saveMatches(matcher, outFile);
 				System.out.printf("Performing pass %d at %.2f\r\n", pass++, threshold);
 				status = matcher.getStringStatusSummary(true);
 				//matcher.autoMatchAll(simpleProgressListener);
-				autoMatchAll(env, matcher, threshold, 0.085, simpleProgressListener);
+				autoMatchAll(env, matcher, threshold, relThreshold, simpleProgressListener);
 				System.out.println("Propagating names");
 				matcher.propagateNames(simpleProgressListener);
 				System.out.println();
 				System.out.println("Attempting to match perfect members");
 				env.getClassesA().forEach(cls->matchPerfectMembers(cls, matcher, env));
 				System.out.println("Checking duds");
-				matcher.unMatchDuds(threshold, 0.085, simpleProgressListener);
+				matcher.unMatchDuds(threshold, relThreshold, simpleProgressListener);
 			} while (!status.equals(matcher.getStringStatusSummary(true)));
 		} while (threshold > 0.60);
 

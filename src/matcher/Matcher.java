@@ -996,7 +996,13 @@ public class Matcher {
 	}
 
 	public boolean autoMatchClasses(ClassifierLevel level, double absThreshold, double relThreshold, DoubleConsumer progressReceiver) {
-		Predicate<ClassInstance> filter = cls -> cls.getUri() != null && cls.isNameObfuscated(false) && cls.getMatch() == null;
+		Predicate<ClassInstance> filter =
+											cls -> cls.getUri() != null &&
+											cls.isNameObfuscated(false) &&
+									        (this.enableRematches || cls.getMatch() == null) &&
+											!cls.isAnonymous() &&//anonymous shouldnt really be auto done against just any other
+											(cls.getMethods().length > 0 || cls.getFields().length > 0) &&//empty classes/interfaces don't have much to match on
+											(cls.getOuterClass() == null || cls.getOuterClass() == cls || cls.getOuterClass().getMatch() != null);//only match inners once the parents have matched
 
 		List<ClassInstance> classes = env.getClassesA().stream()
 				.filter(filter)
@@ -1008,12 +1014,13 @@ public class Matcher {
 		Map<ClassInstance, ClassInstance> matches = new ConcurrentHashMap<>(classes.size());
 
 		runInParallel(classes, cls -> {
-			List<RankResult<ClassInstance>> ranking = ClassClassifier.rank(cls, cmpClasses, level, env);
+			List<RankResult<ClassInstance>> ranking = ClassClassifier.rank(cls, cmpClasses, level, env, enableRematches);
 
 			if (checkRank(ranking, absThreshold, relThreshold)) {
 				ClassInstance match = ranking.get(0).getSubject();
 
-				matches.put(cls, match);
+				if (!enableRematches || cls.getMatch() != match)
+					matches.put(cls, match);
 			}
 		}, progressReceiver);
 
@@ -1023,7 +1030,7 @@ public class Matcher {
 			match(entry.getKey(), entry.getValue());
 		}
 
-		System.out.println("Auto matched "+matches.size()+" classes ("+(classes.size() - matches.size())+" unmatched, "+env.getClassesA().size()+" total)");
+		System.out.println("Auto matched "+matches.size()+" classes ("+(env.getClassesA().size() - env.getClassesA().stream().filter(c->c.getMatch()==null).count())+" unmatched, "+env.getClassesA().size()+" total)");
 
 		return !matches.isEmpty();
 	}
@@ -1335,7 +1342,7 @@ public class Matcher {
 		int removed = 0;
 		for (int i = 0; i<classes.length; i++){
 			progressReceiver.accept(i/(double)classes.length);
-			List<RankResult<ClassInstance>> ranking = ClassClassifier.rank(classes[i], new ClassInstance[]{classes[i].getMatch()}, ClassifierLevel.Full, env);
+			List<RankResult<ClassInstance>> ranking = ClassClassifier.rank(classes[i], new ClassInstance[]{classes[i].getMatch()}, ClassifierLevel.Full, env, false);
 
 			if (!checkRank(ranking, absThreshold, relThreshold)) {
 				unmatch(classes[i]);
@@ -1343,6 +1350,10 @@ public class Matcher {
 			}
 		}
 		System.out.printf("Removed %d invalid matches\r\n", removed);
+	}
+	
+	public void setAllowRematches(boolean newVal){
+		this.enableRematches = newVal;
 	}
 
 	public static class MatchingStatus {
@@ -1380,4 +1391,5 @@ public class Matcher {
 	private final double relFieldAutoMatchThreshold = 0.085;
 	private final double absMethodArgAutoMatchThreshold = 0.85;
 	private final double relMethodArgAutoMatchThreshold = 0.085;
+	private boolean enableRematches = false;
 }

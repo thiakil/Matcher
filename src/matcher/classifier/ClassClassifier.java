@@ -55,6 +55,7 @@ public class ClassClassifier {
 		addClassifier(membersFull, 10, ClassifierLevel.Full, ClassifierLevel.Extra);
 		addClassifier(inRefsBci, 6, ClassifierLevel.Extra);
 		addClassifier(classAnnotations, 5);
+		addClassifier(obfIndex, 10);
 	}
 
 	private static void addClassifier(AbstractClassifier classifier, double weight, ClassifierLevel... levels) {
@@ -72,8 +73,8 @@ public class ClassClassifier {
 		return maxScore.getOrDefault(level, 0.);
 	}
 
-	public static List<RankResult<ClassInstance>> rank(ClassInstance srcClass, ClassInstance[] dstClasses, ClassifierLevel level, ClassEnvironment env) {
-		return ClassifierUtil.rank(srcClass, dstClasses, classifiers.getOrDefault(level, Collections.emptyList()), getMaxScore(level), ClassifierUtil::checkPotentialEquality, env);
+	public static List<RankResult<ClassInstance>> rank(ClassInstance srcClass, ClassInstance[] dstClasses, ClassifierLevel level, ClassEnvironment env, boolean enableRematch) {
+		return ClassifierUtil.rank(srcClass, dstClasses, classifiers.getOrDefault(level, Collections.emptyList()), getMaxScore(level), (a,b)->ClassifierUtil.checkPotentialEquality(a,b,enableRematch), env);
 	}
 
 	private static final Map<ClassifierLevel, List<IClassifier<ClassInstance>>> classifiers = new EnumMap<>(ClassifierLevel.class);
@@ -126,28 +127,28 @@ public class ClassClassifier {
 			if (clsA.getSuperClass() == null && clsB.getSuperClass() == null) return 1;
 			if (clsA.getSuperClass() == null || clsB.getSuperClass() == null) return 0;
 
-			return ClassifierUtil.checkPotentialEquality(clsA.getSuperClass(), clsB.getSuperClass()) ? 1 : 0;
+			return ClassifierUtil.checkPotentialEquality(clsA.getSuperClass(), clsB.getSuperClass(), false) ? 1 : 0;
 		}
 	};
 
 	private static AbstractClassifier childClasses = new AbstractClassifier("child classes") {
 		@Override
 		public double getScore(ClassInstance clsA, ClassInstance clsB, ClassEnvironment env) {
-			return ClassifierUtil.compareClassSets(clsA.getChildClasses(), clsB.getChildClasses(), true);
+			return ClassifierUtil.compareClassSets(clsA.getChildClasses(), clsB.getChildClasses(), true, false);
 		}
 	};
 
 	private static AbstractClassifier interfaces = new AbstractClassifier("interfaces") {
 		@Override
 		public double getScore(ClassInstance clsA, ClassInstance clsB, ClassEnvironment env) {
-			return ClassifierUtil.compareClassSets(clsA.getInterfaces(), clsB.getInterfaces(), true);
+			return ClassifierUtil.compareClassSets(clsA.getInterfaces(), clsB.getInterfaces(), true, false);
 		}
 	};
 
 	private static AbstractClassifier implementers = new AbstractClassifier("implementers") {
 		@Override
 		public double getScore(ClassInstance clsA, ClassInstance clsB, ClassEnvironment env) {
-			return ClassifierUtil.compareClassSets(clsA.getImplementers(), clsB.getImplementers(), true);
+			return ClassifierUtil.compareClassSets(clsA.getImplementers(), clsB.getImplementers(), true, false);
 		}
 	};
 
@@ -160,7 +161,7 @@ public class ClassClassifier {
 			if (outerA == null && outerB == null) return 1;
 			if (outerA == null || outerB == null) return 0;
 
-			return ClassifierUtil.checkPotentialEquality(outerA, outerB) ? 1 : 0;
+			return ClassifierUtil.checkPotentialEquality(outerA, outerB, false) ? 1 : 0;
 		}
 	};
 
@@ -173,7 +174,7 @@ public class ClassClassifier {
 			if (innerA.isEmpty() && innerB.isEmpty()) return 1;
 			if (innerA.isEmpty() || innerB.isEmpty()) return 0;
 
-			return ClassifierUtil.compareClassSets(innerA, innerB, true);
+			return ClassifierUtil.compareClassSets(innerA, innerB, true, false);
 		}
 	};
 
@@ -206,7 +207,7 @@ public class ClassClassifier {
 				{
 					mBLoop: for (MethodInstance methodB : methodsB) {
 						if (!ClassifierUtil.checkPotentialEquality(methodA, methodB)) continue;
-						if (!ClassifierUtil.checkPotentialEquality(methodA.getRetType(), methodB.getRetType())) continue;
+						if (!ClassifierUtil.checkPotentialEquality(methodA.getRetType(), methodB.getRetType(), false)) continue;
 
 						MethodVarInstance[] argsA = methodA.getArgs();
 						MethodVarInstance[] argsB = methodB.getArgs();
@@ -216,7 +217,7 @@ public class ClassClassifier {
 							ClassInstance argA = argsA[i].getType();
 							ClassInstance argB = argsB[i].getType();
 
-							if (!ClassifierUtil.checkPotentialEquality(argA, argB)) {
+							if (!ClassifierUtil.checkPotentialEquality(argA, argB, false)) {
 								continue mBLoop;
 							}
 						}
@@ -254,7 +255,7 @@ public class ClassClassifier {
 			Set<ClassInstance> refsA = getOutRefs(clsA);
 			Set<ClassInstance> refsB = getOutRefs(clsB);
 
-			return ClassifierUtil.compareClassSets(refsA, refsB, false);
+			return ClassifierUtil.compareClassSets(refsA, refsB, false, false);
 		}
 	};
 
@@ -278,7 +279,7 @@ public class ClassClassifier {
 			Set<ClassInstance> refsA = getInRefs(clsA);
 			Set<ClassInstance> refsB = getInRefs(clsB);
 
-			return ClassifierUtil.compareClassSets(refsA, refsB, false);
+			return ClassifierUtil.compareClassSets(refsA, refsB, false, false);
 		}
 	};
 
@@ -518,6 +519,41 @@ public class ClassClassifier {
 
 			ClassifierUtil.handleNumberValue(asmNode.value, ints, longs, floats, doubles);
 		}
+	}
+	
+	//short of a major refactor the letters wont shift drastically, so the closer they are, the better the chance
+	private static AbstractClassifier obfIndex = new AbstractClassifier("obfuscated index") {
+		@Override
+		public double getScore(ClassInstance a, ClassInstance b, ClassEnvironment env) {
+			if (a.getName().contains("/") && b.getName().contains("/")){
+				return 1;
+			}
+			if (a.getName().contains("/") || b.getName().contains("/")){
+				return 0;//doesn't apply if only one is obf
+			}
+			
+			return ClassifierUtil.compareCounts(getObfIndex(a.getName()), getObfIndex(b.getName()));
+		}
+	};
+	
+	private static int getObfIndex(String in){
+		if (in == null || in.isEmpty()){
+			return 0;
+		}
+		int result = 0;
+		for (int col = in.length(); col > 0; col--){
+			result += (Math.pow(26, col-1) * getDigit(in.charAt(in.length()-col)));
+		}
+		return result;
+	}
+	
+	private static int getDigit(char c){
+		if (c >= 'A' && c <= 'Z'){
+			return c - 'A' + 1;
+		} else if (c >= 'a' && c <= 'z'){
+			return c - 'a' + 1;
+		}
+		return 0;
 	}
 
 	static abstract class AbstractClassifier implements IClassifier<ClassInstance> {

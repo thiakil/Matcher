@@ -121,7 +121,7 @@ public class MethodClassifier {
 	private static AbstractClassifier argTypes = new AbstractClassifier("arg types") {
 		@Override
 		public double getScore(MethodInstance methodA, MethodInstance methodB, ClassEnvironment env) {
-			return ClassifierUtil.compareClassLists(getArgTypes(methodA), getArgTypes(methodB));
+			return ClassifierUtil.compareClassLists(getArgTypes(methodA), getArgTypes(methodB), false);
 		}
 	};
 
@@ -141,14 +141,14 @@ public class MethodClassifier {
 	private static AbstractClassifier retType = new AbstractClassifier("ret type") {
 		@Override
 		public double getScore(MethodInstance methodA, MethodInstance methodB, ClassEnvironment env) {
-			return ClassifierUtil.checkPotentialEquality(methodA.getRetType(), methodB.getRetType()) ? 1 : 0;
+			return ClassifierUtil.checkPotentialEquality(methodA.getRetType(), methodB.getRetType(), false) ? 1 : 0;
 		}
 	};
 
 	private static AbstractClassifier classRefs = new AbstractClassifier("class refs") {
 		@Override
 		public double getScore(MethodInstance methodA, MethodInstance methodB, ClassEnvironment env) {
-			return ClassifierUtil.compareClassSets(methodA.getClassRefs(), methodB.getClassRefs(), true);
+			return ClassifierUtil.compareClassSets(methodA.getClassRefs(), methodB.getClassRefs(), true, false);
 		}
 	};
 

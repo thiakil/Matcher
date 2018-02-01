@@ -45,12 +45,14 @@ import matcher.type.MethodInstance;
 import matcher.type.MethodVarInstance;
 
 public class ClassifierUtil {
-	public static boolean checkPotentialEquality(ClassInstance a, ClassInstance b) {
+	public static boolean checkPotentialEquality(ClassInstance a, ClassInstance b, boolean enableRematch) {
 		if (a == b) return true;
-		if (a.getMatch() != null) return a.getMatch() == b;
-		if (b.getMatch() != null) return b.getMatch() == a;
+		if (!enableRematch) {
+			if (a.getMatch() != null) return a.getMatch() == b;
+			if (b.getMatch() != null) return b.getMatch() == a;
+		}
 		if (a.isArray() != b.isArray()) return false;
-		if (a.isArray() && !checkPotentialEquality(a.getElementClass(), b.getElementClass())) return false;
+		if (a.isArray() && !checkPotentialEquality(a.getElementClass(), b.getElementClass(), enableRematch)) return false;
 
 		boolean nameObfA = a.isNameObfuscated(false);
 		boolean nameObfB = b.isNameObfuscated(false);
@@ -64,7 +66,7 @@ public class ClassifierUtil {
 		if (a == b) return true;
 		if (a.getMatch() != null) return a.getMatch() == b;
 		if (b.getMatch() != null) return b.getMatch() == a;
-		if (!checkPotentialEquality(a.getCls(), b.getCls())) return false;
+		if (!checkPotentialEquality(a.getCls(), b.getCls(), false)) return false;
 
 		boolean nameObfA = a.isNameObfuscated(false);
 		boolean nameObfB = b.isNameObfuscated(false);
@@ -78,7 +80,7 @@ public class ClassifierUtil {
 		if (a == b) return true;
 		if (a.getMatch() != null) return a.getMatch() == b;
 		if (b.getMatch() != null) return b.getMatch() == a;
-		if (!checkPotentialEquality(a.getCls(), b.getCls())) return false;
+		if (!checkPotentialEquality(a.getCls(), b.getCls(), false)) return false;
 
 		boolean nameObfA = a.isNameObfuscated(false);
 		boolean nameObfB = b.isNameObfuscated(false);
@@ -103,11 +105,11 @@ public class ClassifierUtil {
 		return true;
 	}
 
-	public static boolean checkPotentialEqualityNullable(ClassInstance a, ClassInstance b) {
+	public static boolean checkPotentialEqualityNullable(ClassInstance a, ClassInstance b, boolean enableRematch) {
 		if (a == null && b == null) return true;
 		if (a == null || b == null) return false;
 
-		return checkPotentialEquality(a, b);
+		return checkPotentialEquality(a, b, enableRematch);
 	}
 
 	public static boolean checkPotentialEqualityNullable(MethodInstance a, MethodInstance b) {
@@ -150,8 +152,8 @@ public class ClassifierUtil {
 		return total == 0 ? 1 : (double) matched / total;
 	}
 
-	public static double compareClassSets(Set<ClassInstance> setA, Set<ClassInstance> setB, boolean readOnly) {
-		return compareIdentitySets(setA, setB, readOnly, ClassifierUtil::checkPotentialEquality);
+	public static double compareClassSets(Set<ClassInstance> setA, Set<ClassInstance> setB, boolean readOnly, boolean enableRematch) {
+		return compareIdentitySets(setA, setB, readOnly, (a,b)->ClassifierUtil.checkPotentialEquality(a,b,enableRematch));
 	}
 
 	public static double compareMethodSets(Set<MethodInstance> setA, Set<MethodInstance> setB, boolean readOnly) {
@@ -244,8 +246,8 @@ public class ClassifierUtil {
 		return (double) (total - unmatched) / total;
 	}
 
-	public static double compareClassLists(List<ClassInstance> listA, List<ClassInstance> listB) {
-		return compareLists(listA, listB, List::get, List::size, ClassifierUtil::checkPotentialEquality);
+	public static double compareClassLists(List<ClassInstance> listA, List<ClassInstance> listB, boolean enableRematch) {
+		return compareLists(listA, listB, List::get, List::size, (a,b)->ClassifierUtil.checkPotentialEquality(a,b,enableRematch));
 	}
 
 	public static double compareInsns(InsnList listA, InsnList listB, ClassEnvironment env) {
@@ -278,7 +280,7 @@ public class ClassifierUtil {
 			ClassInstance clsA = env.getClsByNameA(a.desc);
 			ClassInstance clsB = env.getClsByNameB(b.desc);
 
-			return checkPotentialEqualityNullable(clsA, clsB);
+			return checkPotentialEqualityNullable(clsA, clsB, false);
 		}
 		case AbstractInsnNode.FIELD_INSN: {
 			FieldInsnNode a = (FieldInsnNode) insnA;
@@ -369,7 +371,7 @@ public class ClassifierUtil {
 				switch (typeA.getSort()) {
 				case Type.ARRAY:
 				case Type.OBJECT:
-					return checkPotentialEqualityNullable(env.getClsByIdA(typeA.getDescriptor()), env.getClsByIdB(typeB.getDescriptor()));
+					return checkPotentialEqualityNullable(env.getClsByIdA(typeA.getDescriptor()), env.getClsByIdB(typeB.getDescriptor()), false);
 				case Type.METHOD:
 					// TODO: implement
 					break;
@@ -407,7 +409,7 @@ public class ClassifierUtil {
 			ClassInstance clsA = env.getClsByNameA(a.desc);
 			ClassInstance clsB = env.getClsByNameB(b.desc);
 
-			return checkPotentialEqualityNullable(clsA, clsB);
+			return checkPotentialEqualityNullable(clsA, clsB, false);
 		}
 		case AbstractInsnNode.FRAME: {
 			// TODO: implement
