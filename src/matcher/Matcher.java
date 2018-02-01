@@ -47,6 +47,7 @@ import matcher.type.InputFile;
 import matcher.type.MemberInstance;
 import matcher.type.MethodInstance;
 import matcher.type.MethodVarInstance;
+import org.objectweb.asm.Opcodes;
 
 public class Matcher {
 	public static void init() {
@@ -1001,8 +1002,9 @@ public class Matcher {
 											cls.isNameObfuscated(false) &&
 									        (this.enableRematches || cls.getMatch() == null) &&
 											!cls.isAnonymous() &&//anonymous shouldnt really be auto done against just any other
-											(cls.getMethods().length > 0 || cls.getFields().length > 0) &&//empty classes/interfaces don't have much to match on
-											(cls.getOuterClass() == null || cls.getOuterClass() == cls || cls.getOuterClass().getMatch() != null);//only match inners once the parents have matched
+											((cls.getAccess() & Opcodes.ACC_SYNTHETIC) == 0 ) &&
+											(cls.getMethods().length > 0 || cls.getFields().length > 0);// &&//empty classes/interfaces don't have much to match on
+											//(cls.getOuterClass() == null || cls.getOuterClass() == cls || cls.getOuterClass().getMatch() != null);//only match inners once the parents have matched
 
 		List<ClassInstance> classes = env.getClassesA().stream()
 				.filter(filter)
@@ -1030,7 +1032,7 @@ public class Matcher {
 			match(entry.getKey(), entry.getValue());
 		}
 
-		System.out.println("Auto matched "+matches.size()+" classes ("+(env.getClassesA().size() - env.getClassesA().stream().filter(c->c.getMatch()==null).count())+" unmatched, "+env.getClassesA().size()+" total)");
+		System.out.println("Auto matched "+matches.size()+" classes ("+(env.getClassesA().stream().filter(c->c.getMatch()==null).count())+" unmatched, "+env.getClassesA().size()+" total)");
 
 		return !matches.isEmpty();
 	}
@@ -1340,6 +1342,8 @@ public class Matcher {
 	public void unMatchDuds(double absThreshold, double relThreshold, DoubleConsumer progressReceiver){
 		ClassInstance[] classes = env.getClassesA().stream().filter(cls->cls.getMatch()!=null).toArray(ClassInstance[]::new);
 		int removed = 0;
+		int removedMethods = 0;
+		int removedFields = 0;
 		for (int i = 0; i<classes.length; i++){
 			progressReceiver.accept(i/(double)classes.length);
 			List<RankResult<ClassInstance>> ranking = ClassClassifier.rank(classes[i], new ClassInstance[]{classes[i].getMatch()}, ClassifierLevel.Full, env, false);
@@ -1347,9 +1351,25 @@ public class Matcher {
 			if (!checkRank(ranking, absThreshold, relThreshold)) {
 				unmatch(classes[i]);
 				removed++;
+			} else {
+				for (MethodInstance meth : classes[i].getMethods()){
+					List<RankResult<MethodInstance>> methodMatches = MethodClassifier.rank(meth, classes[i].getMethods(), ClassifierLevel.Full, env);
+					if (methodMatches.get(0).getSubject() != meth.getMatch() || !checkRank(methodMatches, absThreshold, relThreshold)){
+						unmatch(meth);
+						removedMethods++;
+					}
+				}
+
+				for (FieldInstance field : classes[i].getFields()){
+					List<RankResult<FieldInstance>> fieldMatches = FieldClassifier.rank(field, classes[i].getFields(), ClassifierLevel.Full, env);
+					if (fieldMatches.get(0).getSubject() != field.getMatch() || !checkRank(fieldMatches, absThreshold, relThreshold)){
+						unmatch(field);
+						removedFields++;
+					}
+				}
 			}
 		}
-		System.out.printf("Removed %d invalid matches\r\n", removed);
+		System.out.printf("Removed %d invalid class matches, %d invalid method matches, %d invalid field matches\r\n", removed, removedMethods, removedFields);
 	}
 	
 	public void setAllowRematches(boolean newVal){
