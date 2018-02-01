@@ -40,6 +40,7 @@ public class ConsoleMatcher {
 		OptionSpec<Path> outFileOpt = parser.accepts("out", "Output file (matches file)").withRequiredArg().withValuesConvertedBy(converterWritable).required();
 		OptionSpec<Path> seedFileOpt = parser.accepts("seed", "matches base file to load").withRequiredArg().withValuesConvertedBy(converterReadable);
 		OptionSpec help = parser.accepts("help").forHelp();
+		OptionSpec allowRematches = parser.accepts("allow-rematch");
 
 		final OptionSet options = parser.parse(args);
 
@@ -89,7 +90,7 @@ public class ConsoleMatcher {
 
 		System.out.println("Loading inputs");
 		matcher.init(config, simpleProgressListener);
-		matcher.setAllowRematches(true);
+		matcher.setAllowRematches(options.hasArgument(allowRematches));
 
 		if (options.has(seedFileOpt)){
 			Path seedFile = options.valueOf(seedFileOpt);
