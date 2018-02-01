@@ -1357,7 +1357,7 @@ public class Matcher {
 						continue;
 					}
 					List<RankResult<MethodInstance>> methodMatches = MethodClassifier.rank(meth, classes[i].getMethods(), ClassifierLevel.Full, env);
-					if (methodMatches.get(0).getSubject() != meth.getMatch() || !checkRank(methodMatches, absThreshold, relThreshold)){
+					if (methodMatches.size() == 0 || methodMatches.get(0).getSubject() != meth.getMatch() || !checkRank(methodMatches, absThreshold, relThreshold)){
 						unmatch(meth);
 						removedMethods++;
 					}
@@ -1368,7 +1368,7 @@ public class Matcher {
 						continue;
 					}
 					List<RankResult<FieldInstance>> fieldMatches = FieldClassifier.rank(field, classes[i].getFields(), ClassifierLevel.Full, env);
-					if (fieldMatches.get(0).getSubject() != field.getMatch() || !checkRank(fieldMatches, absThreshold, relThreshold)){
+					if (fieldMatches.size() == 0 || fieldMatches.get(0).getSubject() != field.getMatch() || !checkRank(fieldMatches, absThreshold, relThreshold)){
 						unmatch(field);
 						removedFields++;
 					}
