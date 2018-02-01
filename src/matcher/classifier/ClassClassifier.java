@@ -55,7 +55,7 @@ public class ClassClassifier {
 		addClassifier(membersFull, 10, ClassifierLevel.Full, ClassifierLevel.Extra);
 		addClassifier(inRefsBci, 6, ClassifierLevel.Extra);
 		addClassifier(classAnnotations, 5);
-		addClassifier(obfIndex, 10);
+		addClassifier(obfIndex, 20);
 	}
 
 	private static void addClassifier(AbstractClassifier classifier, double weight, ClassifierLevel... levels) {
