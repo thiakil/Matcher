@@ -90,7 +90,7 @@ public class MethodClassifier {
 			}
 		}
 
-		return ClassifierUtil.rank(src, dsts, classifiers.getOrDefault(level, Collections.emptyList()), getMaxScore(level), ClassifierUtil::checkPotentialEquality, env);
+		return ClassifierUtil.rank(src, dsts, classifiers.getOrDefault(level, Collections.emptyList()), getMaxScore(level), (a,b)->ClassifierUtil.checkPotentialEquality(a,b,!restrictAlreadyMatched), env);
 	}
 
 	private static final Map<ClassifierLevel, List<IClassifier<MethodInstance>>> classifiers = new EnumMap<>(ClassifierLevel.class);

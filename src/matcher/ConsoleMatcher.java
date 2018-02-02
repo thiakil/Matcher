@@ -101,25 +101,25 @@ public class ConsoleMatcher {
 		System.out.println("Matching perfect enums");
 		matcher.autoMatchPerfectEnums(simpleProgressListener);
 
-		System.out.println("Performing initial match (0.9)");
+		System.out.println("Performing initial match (0.9, 0.045)");
 		//matcher.autoMatchAll(simpleProgressListener);
 		autoMatchAll(env, matcher, 0.9, 0.045, simpleProgressListener);
 		System.out.println("Propagating names");
 		matcher.propagateNames(simpleProgressListener);
 
 		System.out.println("Checking duds");
-		matcher.unMatchDuds(0.9, 0.045, simpleProgressListener);
+		matcher.unMatchDuds(0.9, 0.05, simpleProgressListener);
 
 		int pass = 2;
 		double threshold = 0.9;
-		double relThreshold = 0.045;
+		double relThreshold = 0.05;
 		String status;
 		do {
 			threshold-=0.1;
-			relThreshold += 0.005;
+			relThreshold += 0.01;
 			do {
 				saveMatches(matcher, outFile);
-				System.out.printf("Performing pass %d at %.2f\r\n", pass++, threshold);
+				System.out.printf("Performing pass %d at %.2f & %.3f\r\n", pass++, threshold, relThreshold);
 				status = matcher.getStringStatusSummary(true);
 				//matcher.autoMatchAll(simpleProgressListener);
 				autoMatchAll(env, matcher, threshold, relThreshold, simpleProgressListener);

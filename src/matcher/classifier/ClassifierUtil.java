@@ -63,9 +63,14 @@ public class ClassifierUtil {
 	}
 
 	public static boolean checkPotentialEquality(MethodInstance a, MethodInstance b) {
+		return checkPotentialEquality(a,b,false);
+	}
+	public static boolean checkPotentialEquality(MethodInstance a, MethodInstance b, boolean enableRematch) {
 		if (a == b) return true;
-		if (a.getMatch() != null) return a.getMatch() == b;
-		if (b.getMatch() != null) return b.getMatch() == a;
+		if (!enableRematch) {
+			if (a.getMatch() != null) return a.getMatch() == b;
+			if (b.getMatch() != null) return b.getMatch() == a;
+		}
 		if (!checkPotentialEquality(a.getCls(), b.getCls(), false)) return false;
 
 		boolean nameObfA = a.isNameObfuscated(false);

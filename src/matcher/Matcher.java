@@ -1003,7 +1003,7 @@ public class Matcher {
 									        (this.enableRematches || cls.getMatch() == null) &&
 											!cls.isAnonymous() &&//anonymous shouldnt really be auto done against just any other
 											((cls.getAccess() & Opcodes.ACC_SYNTHETIC) == 0 ) &&
-											(cls.getMethods().length > 0 || cls.getFields().length > 0);// &&//empty classes/interfaces don't have much to match on
+											(cls.getMethods().length > 0 || cls.getFields().length > 0 || cls.getInnerClasses().size() > 0);// &&//empty classes/interfaces don't have much to match on
 											//(cls.getOuterClass() == null || cls.getOuterClass() == cls || cls.getOuterClass().getMatch() != null);//only match inners once the parents have matched
 
 		List<ClassInstance> classes = env.getClassesA().stream()
@@ -1356,8 +1356,9 @@ public class Matcher {
 					if (meth.getMatch() == null){
 						continue;
 					}
-					List<RankResult<MethodInstance>> methodMatches = MethodClassifier.rank(meth, classes[i].getMethods(), ClassifierLevel.Full, env);
+					List<RankResult<MethodInstance>> methodMatches = MethodClassifier.rank(meth, classes[i].getMatch().getMethods(), ClassifierLevel.Full, env, false);
 					if (methodMatches.size() == 0 || methodMatches.get(0).getSubject() != meth.getMatch() || !checkRank(methodMatches, absThreshold, relThreshold)){
+						//System.out.printf("method unmatch: a %b, b %b, c %b\n", methodMatches.size() ==0, methodMatches.size() > 0 && methodMatches.get(0).getSubject() != meth.getMatch(), !checkRank(methodMatches, absThreshold, relThreshold));
 						unmatch(meth);
 						removedMethods++;
 					}
@@ -1367,8 +1368,9 @@ public class Matcher {
 					if (field.getMatch() == null){
 						continue;
 					}
-					List<RankResult<FieldInstance>> fieldMatches = FieldClassifier.rank(field, classes[i].getFields(), ClassifierLevel.Full, env);
+					List<RankResult<FieldInstance>> fieldMatches = FieldClassifier.rank(field, classes[i].getMatch().getFields(), ClassifierLevel.Full, env);
 					if (fieldMatches.size() == 0 || fieldMatches.get(0).getSubject() != field.getMatch() || !checkRank(fieldMatches, absThreshold, relThreshold)){
+						//System.out.printf("field unmatch: a %b, b %b, c %b\n", fieldMatches.size() ==0, fieldMatches.size() > 0 && fieldMatches.get(0).getSubject() != field.getMatch(), !checkRank(fieldMatches, absThreshold, relThreshold));
 						unmatch(field);
 						removedFields++;
 					}
