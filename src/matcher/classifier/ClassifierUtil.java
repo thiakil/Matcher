@@ -51,7 +51,7 @@ public class ClassifierUtil {
 			if (a.getMatch() != null) return a.getMatch() == b;
 			if (b.getMatch() != null) return b.getMatch() == a;
 		}
-		if (a.isArray() != b.isArray()) return false;
+		if (a.isArray() != b.isArray() || a.isAnonymous() != b.isAnonymous() || a.isSynthetic() != b.isSynthetic()) return false;
 		if (a.isArray() && !checkPotentialEquality(a.getElementClass(), b.getElementClass(), enableRematch)) return false;
 
 		boolean nameObfA = a.isNameObfuscated(false);

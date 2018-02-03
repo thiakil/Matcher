@@ -104,11 +104,15 @@ public class ConsoleMatcher {
 		System.out.println("Performing initial match (0.9, 0.045)");
 		//matcher.autoMatchAll(simpleProgressListener);
 		autoMatchAll(env, matcher, 0.9, 0.045, simpleProgressListener);
-		System.out.println("Propagating names");
-		matcher.propagateNames(simpleProgressListener);
 
 		System.out.println("Checking duds");
 		matcher.unMatchDuds(0.9, 0.05, simpleProgressListener);
+
+		System.out.println("Attempting to match perfect members");
+		env.getClassesA().forEach(cls->matchPerfectMembers(cls, matcher, env));
+
+		System.out.println("Propagating names");
+		matcher.propagateNames(simpleProgressListener);
 
 		int pass = 2;
 		double threshold = 0.9;
@@ -123,13 +127,13 @@ public class ConsoleMatcher {
 				status = matcher.getStringStatusSummary(true);
 				//matcher.autoMatchAll(simpleProgressListener);
 				autoMatchAll(env, matcher, threshold, relThreshold, simpleProgressListener);
+				System.out.println("Checking duds");
+				matcher.unMatchDuds(threshold, relThreshold, simpleProgressListener);
+				System.out.println("Attempting to match perfect members");
+				env.getClassesA().forEach(cls->matchPerfectMembers(cls, matcher, env));
 				System.out.println("Propagating names");
 				matcher.propagateNames(simpleProgressListener);
 				System.out.println();
-				System.out.println("Attempting to match perfect members");
-				env.getClassesA().forEach(cls->matchPerfectMembers(cls, matcher, env));
-				System.out.println("Checking duds");
-				matcher.unMatchDuds(threshold, relThreshold, simpleProgressListener);
 			} while (!status.equals(matcher.getStringStatusSummary(true)));
 		} while (threshold > 0.60);
 
@@ -150,10 +154,19 @@ public class ConsoleMatcher {
 	}
 
 	private static boolean canMatchPerfectMembers(ClassInstance cls) {
+		if (cls != null && cls.hasMatch() && cls.getName().equals("aec")){
+			System.out.printf("aec: %b, %b\n", hasUnmatchedMembers(cls), hasUnmatchedMembers(cls.getMatch()));
+		}
 		return cls != null && cls.hasMatch() && hasUnmatchedMembers(cls) && hasUnmatchedMembers(cls.getMatch());
 	}
 
 	private static boolean hasUnmatchedMembers(ClassInstance cls) {
+		if (cls == null){
+			throw new IllegalArgumentException("cls is null");
+		}
+		if (cls.getMethods() == null){
+			throw new IllegalStateException("methods are null somehow, "+cls.toString());
+		}
 		for (MethodInstance m : cls.getMethods()) {
 			if (!m.hasMatch()) return true;
 		}
@@ -166,14 +179,13 @@ public class ConsoleMatcher {
 	}
 
 	private static void matchPerfectMembers(ClassInstance clsA, Matcher matcher, ClassEnvironment env) {
-
 		if (!canMatchPerfectMembers(clsA)) return;
 
 		ClassInstance clsB = clsA.getMatch();
 		final double minScore = 1 - 1e-6;
 		Map<MethodInstance, MethodInstance> matchedMethods = new IdentityHashMap<>();
-		boolean matchedAnyMethods = false;
-		boolean matchedAnyFields = false;
+		int matchedMethodsCount = 0;
+		int matchedfieldsCount = 0;
 
 		for (MethodInstance m : clsA.getMethods()) {
 			if (m.hasMatch()) continue;
@@ -184,6 +196,10 @@ public class ConsoleMatcher {
 				MethodInstance match = results.get(0).getSubject();
 				MethodInstance prev = matchedMethods.putIfAbsent(match, m);
 				if (prev != null) matchedMethods.put(match, null);
+			} else if (clsA.getName().equals("aec") && m.getName().equals("p")){
+				System.out.println("getimeschange didnt match");
+				System.out.printf("score %f, size %d, nextscore %f\n", results.get(0).getScore(), results.size(), results.size() > 0 ? results.get(1).getScore() : -1);
+				System.exit(0);
 			}
 		}
 
@@ -191,7 +207,7 @@ public class ConsoleMatcher {
 			if (entry.getValue() == null) continue;
 
 			matcher.match(entry.getValue(), entry.getKey());
-			matchedAnyMethods = true;
+			matchedMethodsCount++;
 		}
 
 		Map<FieldInstance, FieldInstance> matchedFields = new IdentityHashMap<>();
@@ -212,8 +228,10 @@ public class ConsoleMatcher {
 			if (entry.getValue() == null) continue;
 
 			matcher.match(entry.getValue(), entry.getKey());
-			matchedAnyFields = true;
+			matchedfieldsCount++;
 		}
+
+		//System.out.printf("Matched %d methods, %d fields\n", matchedMethodsCount, matchedfieldsCount);
 
 	}
 

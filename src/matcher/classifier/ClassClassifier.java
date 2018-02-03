@@ -37,7 +37,7 @@ public class ClassClassifier {
 		addClassifier(parentClass, 4);
 		addClassifier(childClasses, 3);
 		addClassifier(interfaces, 3);
-		addClassifier(implementers, 2);
+		addClassifier(implementers, 10);
 		addClassifier(outerClass, 6);
 		addClassifier(innerClasses, 5);
 		addClassifier(methodCount, 3);

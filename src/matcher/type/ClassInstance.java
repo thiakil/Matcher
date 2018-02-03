@@ -78,6 +78,7 @@ public class ClassInstance implements IMatchable<ClassInstance> {
 		this.nameObfuscated = nameObfuscated;
 		this.input = input;
 		this.elementClass = elementClass;
+		this.isAnonymous = getName().matches("\\$\\d+$");
 
 		if (env.isShared()) matchedClass = this;
 	}
@@ -294,7 +295,11 @@ public class ClassInstance implements IMatchable<ClassInstance> {
 	}
 	
 	public boolean isAnonymous() {
-		return getName().matches("\\$\\d+$");
+		return this.isAnonymous;
+	}
+
+	public boolean isSynthetic(){
+		return (getAccess() & Opcodes.ACC_SYNTHETIC) != 0;
 	}
 
 	public MethodInstance getMethod(String id) {
@@ -913,4 +918,5 @@ public class ClassInstance implements IMatchable<ClassInstance> {
 	String mappedComment;
 	ClassInstance matchedClass;
 	final Set<String> annotations = new TreeSet<>(Comparator.naturalOrder());
+	final boolean isAnonymous;
 }

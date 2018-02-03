@@ -43,6 +43,7 @@ import matcher.type.ClassEnvironment;
 import matcher.type.ClassInstance;
 import matcher.type.FieldInstance;
 import matcher.type.IClassEnv;
+import matcher.type.IMatchable;
 import matcher.type.InputFile;
 import matcher.type.MemberInstance;
 import matcher.type.MethodInstance;
@@ -377,7 +378,7 @@ public class Matcher {
 			writeMemberMain(method, out, true);
 
 			for (MethodVarInstance arg : method.getArgs()) {
-				if (arg.getMatch() == null) return;
+				if (arg.getMatch() == null) continue;
 
 				out.write("\t\tma\t");
 				out.write(Integer.toString(arg.getIndex()));
@@ -997,14 +998,24 @@ public class Matcher {
 	}
 
 	public boolean autoMatchClasses(ClassifierLevel level, double absThreshold, double relThreshold, DoubleConsumer progressReceiver) {
-		Predicate<ClassInstance> filter =
-											cls -> cls.getUri() != null &&
-											cls.isNameObfuscated(false) &&
-									        (this.enableRematches || cls.getMatch() == null) &&
-											!cls.isAnonymous() &&//anonymous shouldnt really be auto done against just any other
-											((cls.getAccess() & Opcodes.ACC_SYNTHETIC) == 0 ) &&
-											(cls.getMethods().length > 0 || cls.getFields().length > 0 || cls.getInnerClasses().size() > 0);// &&//empty classes/interfaces don't have much to match on
-											//(cls.getOuterClass() == null || cls.getOuterClass() == cls || cls.getOuterClass().getMatch() != null);//only match inners once the parents have matched
+		Predicate<ClassInstance> filter = cls -> {
+			if (cls.getUri() == null || !cls.isNameObfuscated(false))
+				return false;
+			if (!enableRematches && cls.getMatch() != null){
+				return false;
+			}
+			//(!cls.isAnonymous() || (cls.getOuterClass() != null && cls.getOuterClass().getMatch() != null ))&&//anonymous shouldnt really be auto done against just any other
+			//((cls.getAccess() & Opcodes.ACC_SYNTHETIC) == 0 ) &&
+			if (cls.getMethods().length > 0 || cls.getFields().length > 0 || cls.getInnerClasses().size() > 0){
+				return true;
+			}
+			if (cls.getOuterClass() != null && cls.getOuterClass() != cls && cls.getOuterClass().getMatch() != null)//only match inners once the parents have matched
+				return true;
+			if (cls.isInterface() && cls.getImplementers().stream().anyMatch(c -> c.getMatch() != null)){
+				return true;
+			}
+			return false;
+		};
 
 		List<ClassInstance> classes = env.getClassesA().stream()
 				.filter(filter)
@@ -1187,13 +1198,16 @@ public class Matcher {
 		return !matches.isEmpty();
 	}
 
-	public static boolean checkRank(List<? extends RankResult<?>> ranking, double absThreshold, double relThreshold) {
+	public static boolean checkRank(List<? extends RankResult<? extends IMatchable>> ranking, double absThreshold, double relThreshold) {
 		if (ranking.isEmpty()) return false;
 		if (ranking.get(0).getScore() < absThreshold) return false;
 
 		if (ranking.size() == 1) {
 			return true;
 		} else {
+			/*if (!(ranking.get(1).getScore() < ranking.get(0).getScore() * (1 - relThreshold))){
+				System.out.printf("%s did not match relative, but did absolute: %.2f, %.2f", ranking.get(0).getSubject().getName(), ranking.get(1).getScore(), ranking.get(0).getScore() * (1 - relThreshold));
+			}*/
 			return ranking.get(1).getScore() < ranking.get(0).getScore() * (1 - relThreshold);
 		}
 	}
