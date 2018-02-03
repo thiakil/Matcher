@@ -49,7 +49,7 @@ public class FernFlowerDecompiler {
 	private static Map<String,Object> options = new HashMap<>(IFernflowerPreferences.getDefaults());
 	static {
 		options.put(IFernflowerPreferences.DECOMPILE_GENERIC_SIGNATURES, "1");
-		options.put(IFernflowerPreferences.REMOVE_SYNTHETIC, "1");
+		options.put(IFernflowerPreferences.REMOVE_SYNTHETIC, "0");
 		options.put(IFernflowerPreferences.MAX_PROCESSING_METHOD, "30");
 	}
 	//options.put(IFernflowerPreferences.USE_JAD_VARNAMING, "1");
@@ -62,8 +62,8 @@ public class FernFlowerDecompiler {
 	public static synchronized String decompile(ClassInstance cls, ClassFeatureExtractor extractor, boolean mapped) {
 		AsmDecompiler decompiler = new AsmDecompiler(mycontext, saver, options, Util.DEBUG ? new PrintStreamLogger(System.out) : NullLogger.INSTANCE);
 		ClassInstance toAdd = cls;
-		while (toAdd.getOuterClass() != null && toAdd.getOuterClass() != toAdd)//somehow an infinite loop is possible!
-			toAdd = cls.getOuterClass();
+		while (toAdd.getOuterClass() != null)
+			toAdd = toAdd.getOuterClass();
 		try {
 			addClass(cls, extractor, decompiler, mapped);
 			saver.wanted = cls.getName()+".class";
