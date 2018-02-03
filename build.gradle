@@ -1,0 +1,67 @@
+apply plugin: 'java'
+apply plugin: 'application'
+
+group = "matcher"
+version = "1.0"
+mainClassName = "matcher.Main"
+
+// In this section you declare where to find the dependencies of your project
+repositories {
+    mavenCentral()
+    maven {
+        name = "Forge"
+        url = "http://files.minecraftforge.net/maven/"
+    }
+    ivy {
+        artifactPattern ("http://www.benf.org/other/cfr/[artifact]_[revision].[ext]")
+    }
+}
+
+// In this section you declare the dependencies for your production and test code
+dependencies {
+    compile "net.minecraftforge:forgeflower:1.5.380-SNAPSHOT"
+    compile "com.github.javaparser:javaparser-core:3.5.5"
+    compile "org.ow2.asm:asm-commons:6.0"
+    compile "org.ow2.asm:asm-tree:6.0"
+    compile "org.ow2.asm:asm-analysis:6.0"
+    compile "org.ow2.asm:asm-util:6.0"
+    compile "net.sf.jopt-simple:jopt-simple:5.0.4"
+    compile group:"org.benf", name: "cfr", version: "0_124", ext: "jar"
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs 'src'
+        }
+    }
+}
+
+jar {
+    manifest {
+        attributes (
+            "Main-Class": "matcher.Main",
+            "Class-Path": configurations.compile.collect { it.getName() }.join(' ')
+        )
+    }
+}
+
+task consoleJar(type: Jar){
+    from(sourceSets.main.output)
+    baseName "ConsoleMatcher"
+    manifest {
+        attributes (
+                "Main-Class": "matcher.ConsoleMatcher",
+                "Class-Path": configurations.compile.collect { it.getName() }.join(' ')
+        )
+    }
+    dependsOn classes
+    destinationDir = file("${buildDir}/libs")
+}
+
+artifacts {
+    consoleJar
+}
+
+
+build.dependsOn(consoleJar)
