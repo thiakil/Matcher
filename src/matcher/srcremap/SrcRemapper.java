@@ -46,6 +46,7 @@ import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodReferenceExpr;
 import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.ast.expr.SimpleName;
 import com.github.javaparser.ast.expr.TypeExpr;
 import com.github.javaparser.ast.nodeTypes.NodeWithTypeArguments;
 import com.github.javaparser.ast.stmt.BlockStmt;
@@ -62,6 +63,7 @@ import com.github.javaparser.ast.stmt.WhileStmt;
 import com.github.javaparser.ast.type.ArrayType;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
+import com.github.javaparser.ast.type.ReferenceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.TypeParameter;
 import com.github.javaparser.ast.type.VoidType;
@@ -288,6 +290,7 @@ public class SrcRemapper {
 	}
 
 	private static final DataKey<ClassInstance> CLASS_INSTANCE_KEY = new DataKey<ClassInstance>() {};
+	private static final DataKey<Boolean> MAPPED_NAME_KEY = new DataKey<Boolean>() {};
 
 	private static class Context {
 		public Context(IClassEnv env, boolean mapped) {
@@ -378,6 +381,9 @@ public class SrcRemapper {
 
 			ClassInstance prev = arg.cls;
 			arg.cls = cls;
+			/*if (cls.hasMappedName()){
+				n.setData(MAPPED_NAME_KEY, true);
+			}*/
 
 			n.getMembers().forEach(p -> p.accept(clsRemapVisitor, arg));
 
@@ -455,6 +461,9 @@ public class SrcRemapper {
 				}*/
 
 				handleComment(m.getMappedComment(), n);
+
+				n.getName().setData(MAPPED_NAME_KEY, m.hasMatch());
+
 			} else if (Util.DEBUG) {
 				System.out.println("(not found)");
 			}
@@ -494,6 +503,8 @@ public class SrcRemapper {
 						if (comments == null) comments = new ArrayList<>();
 						comments.add(f.getMappedComment());
 					}
+					v.getName().setData(MAPPED_NAME_KEY, f.hasMatch());
+
 				} else {
 					if (Util.DEBUG)
 						System.out.println(" (not found)");
@@ -1007,7 +1018,7 @@ public class SrcRemapper {
 			return parent.getChildNodes().get(idx + 1);
 		}
 
-		private void printModifiers(final EnumSet<Modifier> modifiers) {
+		protected void printModifiers(final EnumSet<Modifier> modifiers) {
 			for (Modifier m : modifiers) {
 				printer.print(m.asString());
 				printer.print(" ");
@@ -1040,7 +1051,7 @@ public class SrcRemapper {
 			}
 		}
 
-		private void printMemberAnnotations(final NodeList<AnnotationExpr> annotations, final Void arg) {
+		protected void printMemberAnnotations(final NodeList<AnnotationExpr> annotations, final Void arg) {
 			if (annotations.isEmpty()) {
 				return;
 			}
@@ -1079,7 +1090,7 @@ public class SrcRemapper {
 			}
 		}
 
-		private void printTypeParameters(final NodeList<TypeParameter> args, final Void arg) {
+		protected void printTypeParameters(final NodeList<TypeParameter> args, final Void arg) {
 			if (!isNullOrEmpty(args)) {
 				printer.print("<");
 				for (final Iterator<TypeParameter> i = args.iterator(); i.hasNext(); ) {
@@ -1141,13 +1152,13 @@ public class SrcRemapper {
 			printer.print(postfix);
 		}
 
-		private void printJavaComment(final Optional<Comment> javacomment, final Void arg) {
+		protected void printJavaComment(final Optional<Comment> javacomment, final Void arg) {
 			/*if (configuration.isPrintJavaDoc())*/ {
 				javacomment.ifPresent(c -> c.accept(this, arg));
 			}
 		}
 
-		private void printOrphanCommentsBeforeThisChildNode(final Node node) {
+		protected void printOrphanCommentsBeforeThisChildNode(final Node node) {
 			if (configuration.isIgnoreComments()) return;
 			if (node instanceof Comment) return;
 
@@ -1177,7 +1188,7 @@ public class SrcRemapper {
 			}
 		}
 
-		private void printOrphanCommentsEnding(final Node node) {
+		protected void printOrphanCommentsEnding(final Node node) {
 			if (configuration.isIgnoreComments()) return;
 
 			List<Node> everything = new LinkedList<>();
@@ -1206,6 +1217,13 @@ public class SrcRemapper {
 
 		public HTMLPrinter(PrettyPrinterConfiguration prettyPrinterConfiguration) {
 			super(prettyPrinterConfiguration);
+		}
+
+		@Override
+		protected void printModifiers(EnumSet<Modifier> modifiers) {
+			printer.print("\\<span style=\"font-weight: bold; color: orange;\"\\>");
+			super.printModifiers(modifiers);
+			printer.print("\\</span\\>");
 		}
 
 		@Override
@@ -1244,6 +1262,99 @@ public class SrcRemapper {
 			super.visit(n, arg);
 			if (n.getData(SrcRemapper.CLASS_INSTANCE_KEY) != null){
 				printer.print("\\</a\\>");
+			}
+		}
+
+		@Override
+		public void visit(FieldDeclaration n, Void arg) {
+			printOrphanCommentsBeforeThisChildNode(n);
+
+			n.getComment().ifPresent(c -> c.accept(this, arg));
+			printMemberAnnotations(n.getAnnotations(), arg);
+			printModifiers(n.getModifiers());
+			if (!n.getVariables().isEmpty()) {
+				n.getMaximumCommonType().accept(this, arg);
+			}
+
+			printer.print(" ");
+			for (final Iterator<VariableDeclarator> i = n.getVariables().iterator(); i.hasNext(); ) {
+				final VariableDeclarator var = i.next();
+				/*printer.print("<a id=\"");
+				printer.print(var.getName().asString());
+				printer.print(var.getType().asString());
+				printer.print("\">");*/
+				//printer.print("\\<span style=\"font-weight: bold; color: purple;\"\\>");
+				var.accept(this, arg);
+				//printer.print("\\</span\\>");
+				//printer.print("</a>");
+				if (i.hasNext()) {
+					printer.print(", ");
+				}
+			}
+
+			printer.print(";");
+		}
+
+		@Override
+		public void visit(MethodDeclaration n, Void arg) {
+			printOrphanCommentsBeforeThisChildNode(n);
+
+			n.getComment().ifPresent(c -> c.accept(this, arg));
+			printMemberAnnotations(n.getAnnotations(), arg);
+			printModifiers(n.getModifiers());
+			printTypeParameters(n.getTypeParameters(), arg);
+			if (!isNullOrEmpty(n.getTypeParameters())) {
+				printer.print(" ");
+			}
+
+			//printer.print("\\<span style=\"font-weight: bold; color: purple;\"\\>");
+			n.getType().accept(this, arg);
+			printer.print(" ");
+			n.getName().accept(this, arg);
+			//printer.print("\\</span\\>");
+
+			printer.print("(");
+			n.getReceiverParameter().ifPresent(rp -> {
+				rp.accept(this, arg);
+				printer.print(", ");
+			});
+			if (!isNullOrEmpty(n.getParameters())) {
+				for (final Iterator<Parameter> i = n.getParameters().iterator(); i.hasNext(); ) {
+					final Parameter p = i.next();
+					p.accept(this, arg);
+					if (i.hasNext()) {
+						printer.print(", ");
+					}
+				}
+			}
+			printer.print(")");
+
+			if (!isNullOrEmpty(n.getThrownExceptions())) {
+				printer.print(" throws ");
+				for (final Iterator<ReferenceType> i = n.getThrownExceptions().iterator(); i.hasNext(); ) {
+					final ReferenceType name = i.next();
+					name.accept(this, arg);
+					if (i.hasNext()) {
+						printer.print(", ");
+					}
+				}
+			}
+			if (!n.getBody().isPresent()) {
+				printer.print(";");
+			} else {
+				printer.print(" ");
+				n.getBody().get().accept(this, arg);
+			}
+		}
+
+		@Override
+		public void visit(SimpleName n, Void arg) {
+			if (n.getData(MAPPED_NAME_KEY) != null){
+				printer.print("\\<span style=\"color: "+(n.getData(MAPPED_NAME_KEY) ? "green" : "red")+";\"\\>");
+			}
+			super.visit(n, arg);
+			if (n.getData(MAPPED_NAME_KEY) != null){
+				printer.print("\\</span\\>");
 			}
 		}
 	}
