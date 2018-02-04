@@ -63,5 +63,18 @@ artifacts {
     consoleJar
 }
 
+task consoleJarScript(type: CreateStartScripts) {
+    mainClassName = "matcher.ConsoleMatcher"
+    classpath = startScripts.classpath
+    outputDir = startScripts.outputDir
+    applicationName = 'ConsoleMatcher'
+}
+
+applicationDistribution.into("bin") {
+    duplicatesStrategy= DuplicatesStrategy.EXCLUDE
+    from(consoleJarScript)
+    fileMode = 0755
+}
+
 
 build.dependsOn(consoleJar)
