@@ -96,23 +96,19 @@ public class ClassClassifier {
 	private static AbstractClassifier hierarchyDepth = new AbstractClassifier("hierarchy depth") {
 		@Override
 		public double getScore(ClassInstance clsA, ClassInstance clsB, ClassEnvironment env) {
-			int countA = 0;
-			int countB = 0;
-
-			while (clsA.getSuperClass() != null) {
-				clsA = clsA.getSuperClass();
-				countA++;
-			}
-
-			while (clsB.getSuperClass() != null) {
-				clsB = clsB.getSuperClass();
-				countB++;
-			}
-
-			return ClassifierUtil.compareCounts(countA, countB);
+			return ClassifierUtil.compareCounts(getHierarchDepth(clsA), getHierarchDepth(clsB));
 		}
 	};
 
+	public static int getHierarchDepth(ClassInstance cls){
+		int count = 0;
+		
+		while (cls.getSuperClass() != null) {
+			cls = cls.getSuperClass();
+			count++;
+		}
+		return count;
+	}
 
 	private static AbstractClassifier hierarchySiblings = new AbstractClassifier("hierarchy siblings") {
 		@Override
@@ -259,7 +255,7 @@ public class ClassClassifier {
 		}
 	};
 
-	private static Set<ClassInstance> getOutRefs(ClassInstance cls) {
+	public static Set<ClassInstance> getOutRefs(ClassInstance cls) {
 		Set<ClassInstance> ret = Util.newIdentityHashSet();
 
 		for (MethodInstance method : cls.getMethods()) {
@@ -283,7 +279,7 @@ public class ClassClassifier {
 		}
 	};
 
-	private static Set<ClassInstance> getInRefs(ClassInstance cls) {
+	public static Set<ClassInstance> getInRefs(ClassInstance cls) {
 		Set<ClassInstance> ret = Util.newIdentityHashSet();
 
 		for (MethodInstance method : cls.getMethodTypeRefs()) {
@@ -307,7 +303,7 @@ public class ClassClassifier {
 		}
 	};
 
-	private static Set<MethodInstance> getMethodOutRefs(ClassInstance cls) {
+	public static Set<MethodInstance> getMethodOutRefs(ClassInstance cls) {
 		Set<MethodInstance> ret = Util.newIdentityHashSet();
 
 		for (MethodInstance method : cls.getMethods()) {
@@ -327,7 +323,7 @@ public class ClassClassifier {
 		}
 	};
 
-	private static Set<MethodInstance> getMethodInRefs(ClassInstance cls) {
+	public static Set<MethodInstance> getMethodInRefs(ClassInstance cls) {
 		Set<MethodInstance> ret = Util.newIdentityHashSet();
 
 		for (MethodInstance method : cls.getMethods()) {
@@ -347,7 +343,7 @@ public class ClassClassifier {
 		}
 	};
 
-	private static Set<FieldInstance> getFieldReadRefs(ClassInstance cls) {
+	public static Set<FieldInstance> getFieldReadRefs(ClassInstance cls) {
 		Set<FieldInstance> ret = Util.newIdentityHashSet();
 
 		for (MethodInstance method : cls.getMethods()) {
@@ -367,7 +363,7 @@ public class ClassClassifier {
 		}
 	};
 
-	private static Set<FieldInstance> getFieldWriteRefs(ClassInstance cls) {
+	public static Set<FieldInstance> getFieldWriteRefs(ClassInstance cls) {
 		Set<FieldInstance> ret = Util.newIdentityHashSet();
 
 		for (MethodInstance method : cls.getMethods()) {
@@ -536,7 +532,7 @@ public class ClassClassifier {
 		}
 	};
 	
-	private static int getObfIndex(String in){
+	public static int getObfIndex(String in){
 		if (in == null || in.isEmpty()){
 			return 0;
 		}
