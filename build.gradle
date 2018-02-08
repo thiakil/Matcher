@@ -29,6 +29,7 @@ dependencies {
     compile group:"org.benf", name: "cfr", version: "0_124", ext: "jar"
     compile "org.apache.commons:commons-csv:1.5"
     compile 'com.google.code.gson:gson:2.8.2'
+    compile "nz.ac.waikato.cms.weka:weka-stable:3.8.2"
 }
 
 sourceSets {

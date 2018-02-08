@@ -63,7 +63,7 @@ public class JSONifier {
 		
 		addAttribute(attributes, "obfName", "string");
 		addAttribute(attributes, "obfIndex", "numeric");
-		addAttribute(attributes, "mappedName", "string");
+		addAttribute(attributes, "mappedName", "nominal", env.getClassesA().stream().filter(ClassInstance::hasMappedName).map(c->c.getMappedName(true)).toArray(String[]::new));
 		addAttribute(attributes, "hierarchyDepth", "numeric");
 		addAttribute(attributes, "classType", "nominal", "ENUM","INTERFACE","ANNOTATION","ABSTRACT","SYNTHETIC","CLASS");
 		addAttribute(attributes, "hierarchySiblings", "numeric");
@@ -81,7 +81,7 @@ public class JSONifier {
 		addAttribute(attributes, "methodInReferences", "string");
 		addAttribute(attributes, "fieldReadReferences", "string");
 		addAttribute(attributes, "fieldWriteReferences", "string");
-		addAttribute(attributes, "stringConstants", "string");
+		//addAttribute(attributes, "stringConstants", "string");
 		addAttribute(attributes, "numericConstants", "string");
 		addAttribute(attributes, "classAnnotations", "string");
 
@@ -93,6 +93,7 @@ public class JSONifier {
 			data.add(dataEl);
 
 			dataEl.addProperty("sparse", false);
+			dataEl.addProperty("weight", 1.0);
 
 			JsonArray valuesArray = new JsonArray();
 			dataEl.add("values", valuesArray);
@@ -117,7 +118,7 @@ public class JSONifier {
 			valuesArray.add(toNameListMember(ClassClassifier.getMethodInRefs(cls)));
 			valuesArray.add(toNameListMember(ClassClassifier.getFieldReadRefs(cls)));
 			valuesArray.add(toNameListMember(ClassClassifier.getFieldWriteRefs(cls)));
-			valuesArray.add(String.join(",", cls.getStrings()));
+			//valuesArray.add(String.join(",", cls.getStrings()));
 			valuesArray.add(extractNumbers(cls));
 			valuesArray.add(cls.getAnnotations().stream().collect(Collectors.joining("#")));
 			
@@ -186,6 +187,7 @@ public class JSONifier {
 		list.add(obj);
 		obj.addProperty("name", name);
 		obj.addProperty("type", type);
+		obj.addProperty("weight", 1.0);
 		if (values.length > 0){
 			JsonArray vals = new JsonArray(values.length);
 			obj.add("labels", vals);
