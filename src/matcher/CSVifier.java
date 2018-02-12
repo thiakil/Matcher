@@ -50,8 +50,19 @@ public class CSVifier {
 		
 		BufferedWriter writer = Files.newBufferedWriter(Paths.get("C:\\Users\\xander.v\\Downloads\\mcp\\1.12.2.classifiers.csv"));
 		
-		CSVPrinter csvPrinter = new CSVPrinter(writer, CSVFormat.DEFAULT.withHeader(
-				"obfName",
+		List<String> headerList = new ArrayList<>(71405);
+		//headerList.add("obfName");
+		headerList.add("obfIndex");
+		headerList.add("mappedName");
+		headerList.add("hierarchyDepth");
+		headerList.add("classType");
+		headerList.add("hierarchySiblings");
+		for (int i = 0; i<71400; i++){
+			headerList.add(String.format("byte%d", i));
+		}
+		
+		CSVPrinter csvPrinter = new CSVPrinter(writer, CSVFormat.DEFAULT.withHeader(headerList.toArray(new String[0])
+				/*"obfName",
 				"obfIndex",
 				"mappedName",
 				"hierarchyDepth",
@@ -73,10 +84,30 @@ public class CSVifier {
 				"fieldWriteReferences",
 				"stringConstants",
 				"numericConstants",
-				"classAnnotations"
+				"classAnnotations"*/
+				
 		).withEscape('\\').withQuote(null).withDelimiter('\t'));
 		for (ClassInstance cls : env.getClassesA()){
-			csvPrinter.printRecord(
+			if (!cls.hasMappedName())
+				continue;
+			List<Object> record = new ArrayList<>(71405);
+			//record.add(cls.getName());
+			record.add(ClassClassifier.getObfIndex(cls.getName()));
+			record.add(cls.getMappedName(false));
+			record.add(ClassClassifier.getHierarchDepth(cls));
+			record.add(getClassType(cls.getAccess()));
+			record.add(cls.getSuperClass().getChildClasses().size());
+			byte[] bytes = env.serializeClass(cls, true, false);
+			for (int i = 0; i<71400; i++) {
+				if (i < bytes.length){
+					record.add(bytes[i]);
+				} else {
+					record.add("?");
+				}
+			}
+			csvPrinter.printRecord(record);
+			csvPrinter.flush();
+			/*csvPrinter.printRecord(
 					cls.getName(),
 					ClassClassifier.getObfIndex(cls.getName()),
 					cls.getMappedName(false),
@@ -100,7 +131,7 @@ public class CSVifier {
 					String.join(",", cls.getStrings()),
 					extractNumbers(cls),
 					cls.getAnnotations().stream().collect(Collectors.joining("#"))
-			);
+			);*/
 		}
 		csvPrinter.flush();
 	}
