@@ -393,6 +393,9 @@ public class ClassEnvironment implements IClassEnv {
 					cls.addMethod(new MethodInstance(cls, mn.name, mn.desc, mn, nameObfuscated, i));
 
 					ClassifierUtil.extractStrings(mn.instructions, strings);
+					if (cls.isEnum() && mn.name.equals("<clinit>")){
+						processEnumClass(cls, mn);
+					}
 				}
 			}
 
@@ -439,6 +442,34 @@ public class ClassEnvironment implements IClassEnv {
 		ClassVisitor cv = new TraceClassVisitor(null, new PrintWriter(sw));
 		an.accept(cv.visitAnnotation(an.desc, true));
 		return sw.toString();
+	}
+
+	private static void processEnumClass(ClassInstance cls, MethodNode method){
+		Map<String,String> fieldMap = cls.enumValues;
+		Iterator<AbstractInsnNode> it = method.instructions.iterator();
+		while (it.hasNext()){
+			AbstractInsnNode node = it.next();
+			if (node instanceof TypeInsnNode && node.getOpcode() == Opcodes.NEW && ((TypeInsnNode) node).desc.equals(cls.getName())){
+				it.next();
+				AbstractInsnNode name = it.next();
+				if (!(name instanceof LdcInsnNode) || !(((LdcInsnNode) name).cst instanceof String)){
+					continue;
+				}
+				String valueName = (String)((LdcInsnNode) name).cst;
+				while (!(node instanceof MethodInsnNode && node.getOpcode() == Opcodes.INVOKESPECIAL) && it.hasNext()){
+					node = it.next();
+				}
+				if (!(node instanceof MethodInsnNode) || !it.hasNext()){
+					continue;
+				}
+				node = it.next();//we want the put field instruction after the constructor
+				if (!(node instanceof FieldInsnNode && node.getOpcode() == Opcodes.PUTSTATIC && ((FieldInsnNode) node).owner.equals(cls.getName()))){
+					continue;//if the bytecode is doing weird things, we dont want it.
+				}
+				String actualFieldName = ((FieldInsnNode) node).name;
+				fieldMap.put(actualFieldName, valueName);
+			}
+		}
 	}
 
 

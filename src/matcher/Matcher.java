@@ -6,6 +6,7 @@ import java.nio.file.FileVisitOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -636,6 +637,49 @@ public class Matcher {
 		a.setMatch(null);
 
 		env.getCache().clear();
+	}
+
+	public void autoMatchPerfectEnums(DoubleConsumer progressReceiver){
+		Predicate<ClassInstance> filter = cls -> cls.getUri() != null && cls.isEnum() && cls.isNameObfuscated(false) && cls.getMatch() == null;
+
+		List<ClassInstance> classes = env.getClassesA().stream()
+				.filter(filter)
+				.collect(Collectors.toList());
+
+		ClassInstance[] cmpClasses = env.getClassesB().stream()
+				.filter(filter).toArray(ClassInstance[]::new);
+
+		Map<ClassInstance, ClassInstance> matches = new ConcurrentHashMap<>(classes.size());
+
+		runInParallel(classes, cls -> {
+			Collection<String> valuesA = cls.getEnumValues().values();
+			for (ClassInstance b : cmpClasses){
+				Collection<String> valuesB = b.getEnumValues().values();
+				if (valuesA.size() == valuesB.size() && valuesA.containsAll(valuesB) && valuesB.containsAll(valuesA)){
+					matches.put(cls, b);
+				}
+			}
+		}, progressReceiver);
+
+		sanitizeMatches(matches);
+
+		//for each match, match their fields that correspond to the enum values
+		for (Map.Entry<ClassInstance, ClassInstance> classEntry : matches.entrySet()) {
+			match(classEntry.getKey(), classEntry.getValue());
+			Map<String,String> valuesA = classEntry.getKey().getEnumValues();
+			Map<String,String> valuesB = classEntry.getValue().getEnumValues();
+			for (Map.Entry<String,String> fieldAEntry : valuesA.entrySet()){
+				if (!valuesB.containsValue(fieldAEntry.getValue())){
+					System.out.println(classEntry.getKey()+" -> "+classEntry.getValue()+" did not contain match for "+fieldAEntry.getValue()+", THIS SHOULD NOT HAPPEN");
+					continue;
+				}
+				FieldInstance fieldA = classEntry.getKey().getField(fieldAEntry.getKey(), classEntry.getKey().getId());
+				FieldInstance fieldB = classEntry.getValue().getField(valuesB.entrySet().stream().filter(e->e.getValue().equals(fieldAEntry.getValue())).findFirst().orElseThrow(IllegalStateException::new).getKey(), classEntry.getValue().getId());
+				fieldA.setMatch(fieldB);
+			}
+		}
+
+		System.out.println("Auto matched "+matches.size()+" enums");
 	}
 
 	public void autoMatchAll(DoubleConsumer progressReceiver) {

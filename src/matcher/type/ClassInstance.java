@@ -835,6 +835,10 @@ public class ClassInstance implements IMatchable<ClassInstance> {
 		return id.startsWith("L") ? id.substring(1, id.length() - 1) : id;
 	}
 
+	public Map<String, String> getEnumValues() {
+		return enumValues;
+	}
+
 	private static final ClassInstance[] noArrays = new ClassInstance[0];
 	private static final MethodInstance[] noMethods = new MethodInstance[0];
 	private static final FieldInstance[] noFields = new FieldInstance[0];
@@ -866,6 +870,7 @@ public class ClassInstance implements IMatchable<ClassInstance> {
 	final Set<FieldInstance> fieldTypeRefs = Util.newIdentityHashSet();
 
 	final Set<String> strings = new HashSet<>();
+	final Map<String,String> enumValues = new HashMap<>();//REAL enum values, pulled from java.lang.Enum's constructor param
 
 	String mappedName;
 	String mappedComment;

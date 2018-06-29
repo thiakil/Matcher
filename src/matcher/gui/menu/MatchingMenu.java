@@ -38,6 +38,14 @@ public class MatchingMenu extends Menu {
 				() -> gui.onMatchChange(EnumSet.allOf(MatchType.class)),
 				Throwable::printStackTrace));
 
+		menuItem = new MenuItem("Auto perfect enum match");
+		getItems().add(menuItem);
+		menuItem.setOnAction(event -> gui.runProgressTask(
+				"Auto matching enums...",
+				gui.getMatcher()::autoMatchPerfectEnums,
+				() -> gui.onMatchChange(EnumSet.allOf(MatchType.class)),
+				Throwable::printStackTrace));
+
 		menuItem = new MenuItem("Auto method match");
 		getItems().add(menuItem);
 		menuItem.setOnAction(event -> gui.runProgressTask(
