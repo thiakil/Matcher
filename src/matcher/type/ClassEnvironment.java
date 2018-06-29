@@ -1,6 +1,8 @@
 package matcher.type;
 
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.io.UncheckedIOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -16,6 +18,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -24,9 +27,16 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.DoubleConsumer;
 
 import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassVisitor;
+import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.tree.AbstractInsnNode;
+import org.objectweb.asm.tree.AnnotationNode;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.InnerClassNode;
+import org.objectweb.asm.tree.LdcInsnNode;
+import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 
 import matcher.CfrIf;
@@ -34,6 +44,8 @@ import matcher.Util;
 import matcher.classifier.ClassifierUtil;
 import matcher.classifier.MatchingCache;
 import matcher.config.ProjectConfig;
+import org.objectweb.asm.tree.TypeInsnNode;
+import org.objectweb.asm.util.TraceClassVisitor;
 
 public class ClassEnvironment implements IClassEnv {
 	public void init(ProjectConfig config, DoubleConsumer progressReceiver) {
@@ -408,8 +420,27 @@ public class ClassEnvironment implements IClassEnv {
 
 				if (cls.interfaces.add(ifCls)) ifCls.implementers.add(cls);
 			}
+
+			if (cn.visibleAnnotations != null) {
+				for (AnnotationNode an : cn.visibleAnnotations) {
+					cls.annotations.add(buildAnnotationString(an));
+				}
+			}
+
+			if (cn.invisibleAnnotations != null) {
+				for (AnnotationNode an : cn.invisibleAnnotations) {
+					cls.annotations.add(buildAnnotationString(an));
+				}
+			}
 		}
 	}
+	public static String buildAnnotationString(AnnotationNode an){
+		StringWriter sw = new StringWriter();
+		ClassVisitor cv = new TraceClassVisitor(null, new PrintWriter(sw));
+		an.accept(cv.visitAnnotation(an.desc, true));
+		return sw.toString();
+	}
+
 
 	private static void detectOuterClass(ClassInstance cls, ClassNode cn) {
 		if (cn.outerClass != null) {

@@ -20,6 +20,7 @@ import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.FieldInsnNode;
+import org.objectweb.asm.tree.FrameNode;
 import org.objectweb.asm.tree.IincInsnNode;
 import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.IntInsnNode;
@@ -256,7 +257,7 @@ public class ClassifierUtil {
 	}
 
 	private static <T> boolean compareInsns(AbstractInsnNode insnA, AbstractInsnNode insnB, T listA, T listB, ToIntBiFunction<T, AbstractInsnNode> posProvider, ClassEnvironment env) {
-		if (insnA.getOpcode() != insnB.getOpcode()) return false;
+		if (insnA.getOpcode() != insnB.getOpcode() || insnA.getType() != insnB.getType()) return false;
 
 		switch (insnA.getType()) {
 		case AbstractInsnNode.INT_INSN: {
@@ -400,8 +401,18 @@ public class ClassifierUtil {
 			return checkPotentialEqualityNullable(clsA, clsB);
 		}
 		case AbstractInsnNode.FRAME: {
-			// TODO: implement
-			break;
+			FrameNode a = (FrameNode)insnA;
+			FrameNode b = (FrameNode)insnB;
+			if (a.type != b.type || (a.local == null) != (b.local == null) || (a.stack == null) != (b.stack == null)){
+				return false;
+			}
+			if (a.local != null && !compareFrameLists(a.local, b.local)){
+				return false;
+			}
+			if (a.stack != null && !compareFrameLists(a.stack, b.stack)){
+				return false;
+			}
+			return true;
 		}
 		case AbstractInsnNode.LINE: {
 			// TODO: implement
@@ -409,6 +420,32 @@ public class ClassifierUtil {
 		}
 		}
 
+		return true;
+	}
+
+	private static boolean compareFrameLists(List<Object> a, List<Object> b){
+		if (a.size() != b.size())
+			return false;
+		Iterator<Object> aIt = a.iterator();
+		Iterator<Object> bIt = b.iterator();
+		while (aIt.hasNext()){
+			Object aType = aIt.next();
+			Object bType = bIt.next();
+			if (aType == null && bType != null){
+				return false;
+			} else if (bType == null && aType != null){
+				return false;
+			} else if (aType == null){
+				continue;
+			}
+			if (aType.getClass() != bType.getClass()){
+				return false;
+			} else if (aType instanceof Integer){
+				if (aType != bType){//these are reference compared in asm api
+					return false;
+				}
+			}
+		}
 		return true;
 	}
 

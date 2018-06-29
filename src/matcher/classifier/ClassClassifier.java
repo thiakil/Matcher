@@ -48,6 +48,7 @@ public class ClassClassifier {
 		addClassifier(fieldWriteReferences, 5, ClassifierLevel.Intermediate, ClassifierLevel.Full, ClassifierLevel.Extra);
 		addClassifier(membersFull, 10, ClassifierLevel.Full, ClassifierLevel.Extra);
 		addClassifier(inRefsBci, 6, ClassifierLevel.Extra);
+		addClassifier(classAnnotations, 5);
 	}
 
 	private static void addClassifier(AbstractClassifier classifier, double weight, ClassifierLevel... levels) {
@@ -495,6 +496,13 @@ public class ClassClassifier {
 			} else {
 				return (double) matched / (matched + mismatched);
 			}
+		}
+	};
+
+	private static AbstractClassifier classAnnotations = new AbstractClassifier("class annotations") {
+		@Override
+		public double getScore(ClassInstance a, ClassInstance b, ClassEnvironment env) {
+			return ClassifierUtil.compareSets(a.getAnnotations(), b.getAnnotations(), true);
 		}
 	};
 

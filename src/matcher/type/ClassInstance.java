@@ -4,6 +4,7 @@ import java.net.URI;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -12,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+import java.util.TreeSet;
 
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.ClassNode;
@@ -808,6 +810,14 @@ public class ClassInstance implements IMatchable<ClassInstance> {
 		fields[fields.length - 1] = field;
 	}
 
+	void addAnnotation(String annotation){
+		this.annotations.add(annotation);
+	}
+
+	public Set<String> getAnnotations(){
+		return annotations;
+	}
+
 	public static String getId(String name) {
 		if (name.isEmpty()) throw new IllegalArgumentException("empty class name");
 		assert name.charAt(name.length() - 1) != ';' || name.charAt(0) == '[' : name;
@@ -860,4 +870,5 @@ public class ClassInstance implements IMatchable<ClassInstance> {
 	String mappedName;
 	String mappedComment;
 	ClassInstance matchedClass;
+	final Set<String> annotations = new TreeSet<>(Comparator.naturalOrder());
 }
